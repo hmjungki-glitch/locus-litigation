@@ -1,4 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://piianthaxklcpqoyylkv.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpaWFudGhheGtsY3Bxb3l5bGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0Mjg0NDUsImV4cCI6MjA5MDAwNDQ0NX0.uYGQ3UTQJ3eyFaMay8UhXPHM6enXjJhukGiVlJEfwrQ"
+);
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -8,6 +14,7 @@ export default function Home() {
   const login = () => {
     if (id === "adminlocus" && pw === "Locus123!@#") {
       setLoggedIn(true);
+      fetchCases();
     } else {
       alert("로그인 실패");
     }
@@ -20,10 +27,22 @@ export default function Home() {
     status: ""
   });
 
-  const addCase = () => {
-    setCases([...cases, form]);
-    setForm({ land: "", type: "", status: "" });
+  // 🔥 DB에서 불러오기
+  const fetchCases = async () => {
+    const { data } = await supabase.from("cases").select("*");
+    setCases(data || []);
   };
+
+  // 🔥 DB에 저장
+  const addCase = async () => {
+    await supabase.from("cases").insert([form]);
+    setForm({ land: "", type: "", status: "" });
+    fetchCases();
+  };
+
+  useEffect(() => {
+    if (loggedIn) fetchCases();
+  }, [loggedIn]);
 
   if (!loggedIn) {
     return (
@@ -38,7 +57,7 @@ export default function Home() {
 
   return (
     <div style={{ padding: 40 }}>
-      <h2>소송 관리</h2>
+      <h2>소송 관리 (DB 연결됨)</h2>
 
       <input placeholder="지번" value={form.land} onChange={e => setForm({...form, land: e.target.value})} />
       <input placeholder="소송종류" value={form.type} onChange={e => setForm({...form, type: e.target.value})} />
