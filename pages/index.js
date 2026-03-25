@@ -20,6 +20,7 @@ export default function Home() {
 
   const [cases, setCases] = useState([]);
   const [selectedLand, setSelectedLand] = useState(null);
+  const [search, setSearch] = useState("");
 
   const [form, setForm] = useState({
     land: "",
@@ -75,12 +76,29 @@ export default function Home() {
   return (
     <div style={{ padding: 40 }}>
       <h2>지번별 소송 관리</h2>
+<input
+  placeholder="지번 검색"
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  style={{ marginBottom: 10 }}
+/>
 
       {/* 입력 */}
       <div>
         <input placeholder="지번" value={form.land} onChange={e => setForm({...form, land: e.target.value})} />
         <input placeholder="소송종류" value={form.type} onChange={e => setForm({...form, type: e.target.value})} />
-        <input placeholder="진행상황" value={form.status} onChange={e => setForm({...form, status: e.target.value})} />
+        <select
+  value={form.status}
+  onChange={e => setForm({ ...form, status: e.target.value })}
+>
+  <option value="">진행상황 선택</option>
+  <option value="진행중">진행중</option>
+  <option value="1심">1심</option>
+  <option value="2심">2심</option>
+  <option value="3심">3심</option>
+  <option value="항소">항소</option>
+  <option value="종결">종결</option>
+</select>
         <button onClick={addCase}>추가</button>
       </div>
 
@@ -88,7 +106,9 @@ export default function Home() {
 
       {/* 지번 리스트 */}
       <h3>지번 목록</h3>
-      {Object.keys(grouped).map((land) => (
+      {Object.keys(grouped)
+  .filter((land) => land.includes(search))
+  .map((land) => (
         <div key={land} style={{ cursor: "pointer", marginBottom: 10 }}
           onClick={() => setSelectedLand(land)}>
           👉 {land} ({grouped[land].length}건)
@@ -101,13 +121,22 @@ export default function Home() {
       {selectedLand && (
         <div>
           <h3>{selectedLand} 소송 목록</h3>
-          <ul>
-            {grouped[selectedLand].map((c, i) => (
-              <li key={i}>
-                {c.type} / {c.status}
-              </li>
-            ))}
-          </ul>
+          <table border="1" cellPadding="10" style={{ marginTop: 10 }}>
+  <thead>
+    <tr>
+      <th>소송종류</th>
+      <th>진행상황</th>
+    </tr>
+  </thead>
+  <tbody>
+    {grouped[selectedLand].map((c, i) => (
+      <tr key={i}>
+        <td>{c.type}</td>
+        <td>{c.status}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
         </div>
       )}
     </div>
