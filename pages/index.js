@@ -19,7 +19,7 @@ export default function Home() {
   const [pw, setPw] = useState("");
 
   const [cases, setCases] = useState([]);
-  const [selectedLand, setSelectedLand] = useState(null);
+  const [selectedLand, setSelectedLand] = useState("");
   const [search, setSearch] = useState("");
 
   const [form, setForm] = useState({
