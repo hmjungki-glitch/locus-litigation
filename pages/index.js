@@ -73,9 +73,24 @@ export default function Home() {
     );
   }
 
+const total = cases.length;
+const inProgress = cases.filter(c => c.status !== "종결").length;
+const done = cases.filter(c => c.status === "종결").length;
+
   return (
     <div style={{ padding: 40 }}>
       <h2>지번별 소송 관리</h2>
+    <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+  <div style={{ border: "1px solid black", padding: 10 }}>
+    📊 전체: {total}
+  </div>
+  <div style={{ border: "1px solid blue", padding: 10 }}>
+    🔵 진행중: {inProgress}
+  </div>
+  <div style={{ border: "1px solid green", padding: 10 }}>
+    🟢 종결: {done}
+  </div>
+</div>
 <input
   placeholder="지번 검색"
   value={search}
