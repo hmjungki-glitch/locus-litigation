@@ -125,6 +125,11 @@ const COLORS = ["#FF0000", "#00C49F"];
       <div>
         <input placeholder="지번" value={form.land} onChange={e => setForm({...form, land: e.target.value})} />
         <input placeholder="소송종류" value={form.type} onChange={e => setForm({...form, type: e.target.value})} />
+        <input
+  type="date"
+  value={form.next_date || ""}
+  onChange={(e) => setForm({ ...form, next_date: e.target.value })}
+/>
         <select
   value={form.status}
   onChange={e => setForm({ ...form, status: e.target.value })}
