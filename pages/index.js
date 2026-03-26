@@ -3,17 +3,15 @@ import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 
-const supabase = createClient(
-  "https://piianthaxklcpqoyylkv.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpaWFudGhheGtsY3Bxb3l5bGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0Mjg0NDUsImV4cCI6MjA5MDAwNDQ0NX0.uYGQ3UTQJ3eyFaMay8UhXPHM6enXjJhukGiVlJEfwrQ",
-  {
-    global: {
-      headers: {
-        "Content-Type": "application/json",
-      },
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    headers: {
+      "Content-Type": "application/json",
     },
-  }
-);
+  },
+});
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -61,14 +59,20 @@ export default function Home() {
   const [form, setForm] = useState(emptyForm);
   const [rightForm, setRightForm] = useState(emptyRightForm);
 
-  const login = () => {
-    if (id === "adminlocus" && pw === "Locus123!@#") {
-      setLoggedIn(true);
-      fetchCases();
-      fetchRights();
-    } else {
+  const login = async () => {
+    if (id !== "adminlocus" || pw !== "Locus123!@#") {
       alert("로그인 실패");
+      return;
     }
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      alert(".env.local의 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인해주세요.");
+      return;
+    }
+
+    setLoggedIn(true);
+    await fetchCases();
+    await fetchRights();
   };
 
   const fetchCases = async () => {
