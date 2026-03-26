@@ -90,11 +90,24 @@ export default function Home() {
 
   useEffect(() => {
     const savedId = localStorage.getItem("savedLoginId");
+    const savedLoginState = localStorage.getItem("locusLoggedIn");
+
     if (savedId) {
       setId(savedId);
       setRememberId(true);
     }
+
+    if (savedLoginState === "true") {
+      setLoggedIn(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (loggedIn) {
+      fetchCases();
+      fetchRights();
+    }
+  }, [loggedIn]);
 
   const login = async () => {
     if (id !== "adminlocus" || pw !== "Locus123!@#") {
@@ -113,9 +126,16 @@ export default function Home() {
       localStorage.removeItem("savedLoginId");
     }
 
+    localStorage.setItem("locusLoggedIn", "true");
     setLoggedIn(true);
     await fetchCases();
     await fetchRights();
+  };
+
+  const logout = () => {
+    localStorage.removeItem("locusLoggedIn");
+    setLoggedIn(false);
+    setPw("");
   };
 
   const fetchCases = async () => {
@@ -156,6 +176,20 @@ export default function Home() {
     setEditingRightId(null);
   };
 
+  const formatNumberWithComma = (value) => {
+    if (value === null || value === undefined || value === "") return "";
+    const onlyNum = String(value).replaceAll(",", "");
+    if (isNaN(Number(onlyNum))) return value;
+    return Number(onlyNum).toLocaleString();
+  };
+
+  const parseNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const onlyNum = String(value).replaceAll(",", "");
+    if (isNaN(Number(onlyNum))) return null;
+    return Number(onlyNum);
+  };
+
   const addCase = async () => {
     if (!form.land || !form.type || !form.status) {
       alert("지번, 소송종류, 진행상황은 입력해주세요.");
@@ -166,7 +200,7 @@ export default function Home() {
       land: form.land,
       type: form.type,
       case_number: form.case_number || null,
-      claim_amount: form.claim_amount || null,
+      claim_amount: parseNumber(form.claim_amount),
       court: form.court || null,
       assignee: form.assignee || null,
       status: form.status,
@@ -198,7 +232,7 @@ export default function Home() {
       land: form.land,
       type: form.type,
       case_number: form.case_number || null,
-      claim_amount: form.claim_amount || null,
+      claim_amount: parseNumber(form.claim_amount),
       court: form.court || null,
       assignee: form.assignee || null,
       status: form.status,
@@ -254,7 +288,9 @@ export default function Home() {
       land: caseItem.land || "",
       type: caseItem.type || "",
       case_number: caseItem.case_number || "",
-      claim_amount: caseItem.claim_amount || "",
+      claim_amount: caseItem.claim_amount
+        ? Number(caseItem.claim_amount).toLocaleString()
+        : "",
       court: caseItem.court || "",
       assignee: caseItem.assignee || "",
       status: caseItem.status || "",
@@ -321,8 +357,8 @@ export default function Home() {
       land: rightForm.land,
       right_holder: rightForm.right_holder || null,
       right_type: rightForm.right_type || null,
-      rank_order: rightForm.rank_order ? Number(rightForm.rank_order) : null,
-      amount: rightForm.amount ? Number(rightForm.amount) : null,
+      rank_order: parseNumber(rightForm.rank_order),
+      amount: parseNumber(rightForm.amount),
       registration_date: rightForm.registration_date || null,
       cancellation_date: rightForm.cancellation_date || null,
       status: rightForm.status || "유효",
@@ -352,8 +388,8 @@ export default function Home() {
       land: rightForm.land,
       right_holder: rightForm.right_holder || null,
       right_type: rightForm.right_type || null,
-      rank_order: rightForm.rank_order ? Number(rightForm.rank_order) : null,
-      amount: rightForm.amount ? Number(rightForm.amount) : null,
+      rank_order: parseNumber(rightForm.rank_order),
+      amount: parseNumber(rightForm.amount),
       registration_date: rightForm.registration_date || null,
       cancellation_date: rightForm.cancellation_date || null,
       status: rightForm.status || "유효",
@@ -395,8 +431,8 @@ export default function Home() {
       land: item.land || "",
       right_holder: item.right_holder || "",
       right_type: item.right_type || "",
-      rank_order: item.rank_order || "",
-      amount: item.amount || "",
+      rank_order: item.rank_order ? Number(item.rank_order).toLocaleString() : "",
+      amount: item.amount ? Number(item.amount).toLocaleString() : "",
       registration_date: item.registration_date || "",
       cancellation_date: item.cancellation_date || "",
       status: item.status || "유효",
@@ -480,8 +516,9 @@ export default function Home() {
             type: getValueByAliases(row, ["type", "소송종류"]),
             case_number:
               getValueByAliases(row, ["case_number", "사건번호"]) || null,
-            claim_amount:
-              getValueByAliases(row, ["claim_amount", "소가액"]) || null,
+            claim_amount: parseNumber(
+              getValueByAliases(row, ["claim_amount", "소가액"])
+            ),
             court: getValueByAliases(row, ["court", "법원"]) || null,
             assignee: getValueByAliases(row, ["assignee", "담당자"]) || null,
             status: getValueByAliases(row, ["status", "진행상황"]) || null,
@@ -521,12 +558,10 @@ export default function Home() {
               getValueByAliases(row, ["right_holder", "권리자"]) || null,
             right_type:
               getValueByAliases(row, ["right_type", "권리종류"]) || null,
-            rank_order: getValueByAliases(row, ["rank_order", "순위"])
-              ? Number(getValueByAliases(row, ["rank_order", "순위"]))
-              : null,
-            amount: getValueByAliases(row, ["amount", "금액"])
-              ? Number(getValueByAliases(row, ["amount", "금액"]))
-              : null,
+            rank_order: parseNumber(
+              getValueByAliases(row, ["rank_order", "순위"])
+            ),
+            amount: parseNumber(getValueByAliases(row, ["amount", "금액"])),
             registration_date: normalizeDateValue(
               getValueByAliases(row, [
                 "registration_date",
@@ -566,13 +601,6 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    if (loggedIn) {
-      fetchCases();
-      fetchRights();
-    }
-  }, [loggedIn]);
-
   const grouped = useMemo(() => {
     return cases.reduce((acc, cur) => {
       acc[cur.land] = acc[cur.land] || [];
@@ -591,7 +619,9 @@ export default function Home() {
 
   const allLands = useMemo(() => {
     return Array.from(
-      new Set([...cases.map((c) => c.land), ...rights.map((r) => r.land)].filter(Boolean))
+      new Set(
+        [...cases.map((c) => c.land), ...rights.map((r) => r.land)].filter(Boolean)
+      )
     );
   }, [cases, rights]);
 
@@ -943,6 +973,15 @@ export default function Home() {
               >
                 대시보드
               </button>
+              <button
+                style={{
+                  ...buttonSecondary,
+                  background: "#ffffff",
+                }}
+                onClick={logout}
+              >
+                로그아웃
+              </button>
             </div>
           </div>
         </div>
@@ -1042,7 +1081,7 @@ export default function Home() {
                 gap: 24,
               }}
             >
-              <div style={{ ...cardStyle, padding: 24 }}>
+              <div style={{ ...cardStyle, padding: 24, overflowX: "auto" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
                   소송 현황
                 </div>
@@ -1056,10 +1095,7 @@ export default function Home() {
                     label
                   >
                     {chartData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -1067,7 +1103,7 @@ export default function Home() {
                 </PieChart>
               </div>
 
-              <div style={{ ...cardStyle, padding: 24 }}>
+              <div style={{ ...cardStyle, padding: 24, overflowX: "auto" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
                   권리 상태 현황
                 </div>
@@ -1081,10 +1117,7 @@ export default function Home() {
                     label
                   >
                     {rightsChartData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -1100,7 +1133,7 @@ export default function Home() {
                 gap: 24,
               }}
             >
-              <div style={{ ...cardStyle, padding: 24 }}>
+              <div style={{ ...cardStyle, padding: 24, overflowX: "auto" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
                   권리종류별 건수
                 </div>
@@ -1114,10 +1147,7 @@ export default function Home() {
                     label
                   >
                     {rightTypeChartData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -1125,7 +1155,7 @@ export default function Home() {
                 </PieChart>
               </div>
 
-              <div style={{ ...cardStyle, padding: 24 }}>
+              <div style={{ ...cardStyle, padding: 24, overflowX: "auto" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
                   지번별 소송/권리 건수
                 </div>
@@ -1153,7 +1183,7 @@ export default function Home() {
             }}
           >
             <div style={{ display: "grid", gap: 24 }}>
-              <div style={{ ...cardStyle, padding: 20 }}>
+              <div style={{ ...cardStyle, padding: 20, overflowX: "auto" }}>
                 <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
                   {activeTab === "cases" ? "소송 진행 현황" : "권리관계 현황"}
                 </div>
@@ -1183,8 +1213,19 @@ export default function Home() {
               </div>
 
               <div style={{ ...cardStyle, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
-                  지번 검색
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 12,
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 16, fontWeight: 800 }}>지번 검색</div>
+                  <button style={buttonSecondary} onClick={() => setSelectedLand("")}>
+                    선택 해제
+                  </button>
                 </div>
                 <input
                   style={inputStyle}
@@ -1433,7 +1474,10 @@ export default function Home() {
                           placeholder="소가액"
                           value={form.claim_amount}
                           onChange={(e) =>
-                            setForm({ ...form, claim_amount: e.target.value })
+                            setForm({
+                              ...form,
+                              claim_amount: formatNumberWithComma(e.target.value),
+                            })
                           }
                         />
                       </div>
@@ -1541,7 +1585,9 @@ export default function Home() {
                     >
                       <div>
                         <div style={{ fontSize: 20, fontWeight: 800 }}>
-                          {selectedLand ? `${selectedLand} 소송 목록` : "소송 목록"}
+                          {selectedLand
+                            ? `${selectedLand} 소송 목록 (${selectedLandCases.length}건)`
+                            : "소송 목록"}
                         </div>
                         <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
                           지번을 선택하면 상세 소송 내역을 볼 수 있습니다.
@@ -1607,7 +1653,11 @@ export default function Home() {
                               <tr key={c.id}>
                                 <td style={tdStyle}>{c.type}</td>
                                 <td style={tdStyle}>{c.case_number || "-"}</td>
-                                <td style={tdStyle}>{c.claim_amount || "-"}</td>
+                                <td style={tdStyle}>
+                                  {c.claim_amount
+                                    ? Number(c.claim_amount).toLocaleString()
+                                    : "-"}
+                                </td>
                                 <td style={tdStyle}>{c.court || "-"}</td>
                                 <td style={tdStyle}>{c.assignee || "-"}</td>
                                 <td
@@ -1780,7 +1830,7 @@ export default function Home() {
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
-                              rank_order: e.target.value,
+                              rank_order: formatNumberWithComma(e.target.value),
                             })
                           }
                         />
@@ -1793,7 +1843,10 @@ export default function Home() {
                           placeholder="금액"
                           value={rightForm.amount}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, amount: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              amount: formatNumberWithComma(e.target.value),
+                            })
                           }
                         />
                       </div>
@@ -1886,7 +1939,9 @@ export default function Home() {
                     >
                       <div>
                         <div style={{ fontSize: 20, fontWeight: 800 }}>
-                          {selectedLand ? `${selectedLand} 권리관계 목록` : "권리관계 목록"}
+                          {selectedLand
+                            ? `${selectedLand} 권리관계 목록 (${selectedLandRightsFiltered.length}건)`
+                            : "권리관계 목록"}
                         </div>
                         <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
                           지번을 선택하면 상세 권리관계 내역을 볼 수 있습니다.
