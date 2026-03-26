@@ -123,6 +123,9 @@ const COLORS = ["#FF0000", "#00C49F"];
   <div style={{ border: "1px solid green", padding: 10 }}>
     🟢 종결: {done}
   </div>
+    <div style={{ border: "1px solid orange", padding: 10 }}>
+  ⚠️ 임박: {urgent}
+</div>
 </div>
 <input
   placeholder="지번 검색"
