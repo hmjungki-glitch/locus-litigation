@@ -190,8 +190,11 @@ const COLORS = ["#FF0000", "#00C49F"];
       <tr key={i}>
         <td>{c.type}</td>
 <td style={{
+ <td style={{
   color:
-    c.status === "종결"
+    c.next_date && new Date(c.next_date) < new Date(Date.now() + 3*24*60*60*1000)
+      ? "orange"
+      : c.status === "종결"
       ? "green"
       : c.status === "진행중"
       ? "red"
