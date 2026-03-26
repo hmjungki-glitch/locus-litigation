@@ -16,6 +16,8 @@ import * as XLSX from "xlsx";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const adminId = process.env.NEXT_PUBLIC_ADMIN_ID;
+const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
@@ -110,13 +112,18 @@ export default function Home() {
   }, [loggedIn]);
 
   const login = async () => {
-    if (id !== "adminlocus" || pw !== "Locus123!@#") {
-      alert("로그인 실패");
+    if (!supabaseUrl || !supabaseAnonKey) {
+      alert("Vercel 환경변수에 Supabase URL / anon key를 먼저 넣어주세요.");
       return;
     }
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      alert("Vercel 환경변수 설정이 필요합니다.");
+    if (!adminId || !adminPassword) {
+      alert("Vercel 환경변수에 관리자 아이디/비밀번호를 먼저 넣어주세요.");
+      return;
+    }
+
+    if (id !== adminId || pw !== adminPassword) {
+      alert("로그인 실패");
       return;
     }
 
@@ -179,14 +186,14 @@ export default function Home() {
   const formatNumberWithComma = (value) => {
     if (value === null || value === undefined || value === "") return "";
     const onlyNum = String(value).replaceAll(",", "");
-    if (isNaN(Number(onlyNum))) return value;
+    if (Number.isNaN(Number(onlyNum))) return value;
     return Number(onlyNum).toLocaleString();
   };
 
   const parseNumber = (value) => {
     if (value === null || value === undefined || value === "") return null;
     const onlyNum = String(value).replaceAll(",", "");
-    if (isNaN(Number(onlyNum))) return null;
+    if (Number.isNaN(Number(onlyNum))) return null;
     return Number(onlyNum);
   };
 
@@ -973,13 +980,7 @@ export default function Home() {
               >
                 대시보드
               </button>
-              <button
-                style={{
-                  ...buttonSecondary,
-                  background: "#ffffff",
-                }}
-                onClick={logout}
-              >
+              <button style={{ ...buttonSecondary, background: "#ffffff" }} onClick={logout}>
                 로그아웃
               </button>
             </div>
