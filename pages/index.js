@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { useState, useEffect, useMemo } from "react";
+import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 
@@ -13,6 +13,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 });
+
+const RIGHT_TYPE_OPTIONS = ["전체", "근저당권", "가압류", "전세권", "가등기", "압류", "기타"];
+const RIGHT_STATUS_OPTIONS = ["전체", "유효", "말소", "변경", "검토필요"];
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -30,6 +33,11 @@ export default function Home() {
   const [editingId, setEditingId] = useState(null);
   const [editingRightId, setEditingRightId] = useState(null);
   const [excelUploading, setExcelUploading] = useState(false);
+
+  const [rightLandFilter, setRightLandFilter] = useState("");
+  const [rightTypeFilter, setRightTypeFilter] = useState("전체");
+  const [rightStatusFilter, setRightStatusFilter] = useState("전체");
+  const [rightSort, setRightSort] = useState("rank_asc");
 
   const emptyForm = {
     land: "",
@@ -67,7 +75,7 @@ export default function Home() {
     }
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      alert(".env.local의 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인해주세요.");
+      alert("Vercel 환경변수 설정이 필요합니다.");
       return;
     }
 
@@ -83,7 +91,7 @@ export default function Home() {
       .order("id", { ascending: true });
 
     if (error) {
-      alert(error.message);
+      alert("cases 조회 실패: " + error.message);
       return;
     }
 
@@ -279,8 +287,8 @@ export default function Home() {
       land: rightForm.land,
       right_holder: rightForm.right_holder || null,
       right_type: rightForm.right_type || null,
-      rank_order: rightForm.rank_order || null,
-      amount: rightForm.amount || null,
+      rank_order: rightForm.rank_order ? Number(rightForm.rank_order) : null,
+      amount: rightForm.amount ? Number(rightForm.amount) : null,
       registration_date: rightForm.registration_date || null,
       cancellation_date: rightForm.cancellation_date || null,
       status: rightForm.status || "유효",
@@ -310,8 +318,8 @@ export default function Home() {
       land: rightForm.land,
       right_holder: rightForm.right_holder || null,
       right_type: rightForm.right_type || null,
-      rank_order: rightForm.rank_order || null,
-      amount: rightForm.amount || null,
+      rank_order: rightForm.rank_order ? Number(rightForm.rank_order) : null,
+      amount: rightForm.amount ? Number(rightForm.amount) : null,
       registration_date: rightForm.registration_date || null,
       cancellation_date: rightForm.cancellation_date || null,
       status: rightForm.status || "유효",
@@ -440,8 +448,7 @@ export default function Home() {
             assignee: getValueByAliases(row, ["assignee", "담당자"]) || null,
             status: getValueByAliases(row, ["status", "진행상황"]) || null,
             next_date: normalizeDateValue(getValueByAliases(row, ["next_date", "다음기일"])),
-            judgment_result:
-              getValueByAliases(row, ["judgment_result", "판결결과"]) || null,
+            judgment_result: getValueByAliases(row, ["judgment_result", "판결결과"]) || null,
             memo: getValueByAliases(row, ["memo", "메모"]) || null,
             file_url: getValueByAliases(row, ["file_url", "파일URL"]) || null,
           }))
@@ -469,8 +476,12 @@ export default function Home() {
             land: getValueByAliases(row, ["land", "지번"]),
             right_holder: getValueByAliases(row, ["right_holder", "권리자"]) || null,
             right_type: getValueByAliases(row, ["right_type", "권리종류"]) || null,
-            rank_order: getValueByAliases(row, ["rank_order", "순위"]) || null,
-            amount: getValueByAliases(row, ["amount", "금액"]) || null,
+            rank_order: getValueByAliases(row, ["rank_order", "순위"])
+              ? Number(getValueByAliases(row, ["rank_order", "순위"]))
+              : null,
+            amount: getValueByAliases(row, ["amount", "금액"])
+              ? Number(getValueByAliases(row, ["amount", "금액"]))
+              : null,
             registration_date: normalizeDateValue(
               getValueByAliases(row, ["registration_date", "설정일자", "등록일자"])
             ),
@@ -511,21 +522,27 @@ export default function Home() {
     }
   }, [loggedIn]);
 
-  const grouped = cases.reduce((acc, cur) => {
-    acc[cur.land] = acc[cur.land] || [];
-    acc[cur.land].push(cur);
-    return acc;
-  }, {});
+  const grouped = useMemo(() => {
+    return cases.reduce((acc, cur) => {
+      acc[cur.land] = acc[cur.land] || [];
+      acc[cur.land].push(cur);
+      return acc;
+    }, {});
+  }, [cases]);
 
-  const groupedRights = rights.reduce((acc, cur) => {
-    acc[cur.land] = acc[cur.land] || [];
-    acc[cur.land].push(cur);
-    return acc;
-  }, {});
+  const groupedRights = useMemo(() => {
+    return rights.reduce((acc, cur) => {
+      acc[cur.land] = acc[cur.land] || [];
+      acc[cur.land].push(cur);
+      return acc;
+    }, {});
+  }, [rights]);
 
-  const allLands = Array.from(
-    new Set([...cases.map((c) => c.land), ...rights.map((r) => r.land)].filter(Boolean))
-  );
+  const allLands = useMemo(() => {
+    return Array.from(
+      new Set([...cases.map((c) => c.land), ...rights.map((r) => r.land)].filter(Boolean))
+    );
+  }, [cases, rights]);
 
   const total = cases.length;
   const inProgress = cases.filter((c) => c.status !== "종결").length;
@@ -549,11 +566,74 @@ export default function Home() {
     { name: "말소", value: canceledRights },
   ];
 
-  const COLORS = ["#ef4444", "#10b981"];
+  const rightTypeChartData = useMemo(() => {
+    const map = {};
+    rights.forEach((r) => {
+      const key = r.right_type || "미분류";
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [rights]);
+
+  const landSummaryData = useMemo(() => {
+    return allLands.map((land) => ({
+      name: land,
+      cases: grouped[land]?.length || 0,
+      rights: groupedRights[land]?.length || 0,
+    }));
+  }, [allLands, grouped, groupedRights]);
 
   const filteredLands = allLands.filter((land) =>
     land.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredRightsList = rights
+    .filter((item) => {
+      const matchesLand =
+        !rightLandFilter ||
+        (item.land || "").toLowerCase().includes(rightLandFilter.toLowerCase());
+
+      const matchesType =
+        rightTypeFilter === "전체" || (item.right_type || "") === rightTypeFilter;
+
+      const matchesStatus =
+        rightStatusFilter === "전체" || (item.status || "") === rightStatusFilter;
+
+      return matchesLand && matchesType && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (rightSort === "rank_asc") {
+        return Number(a.rank_order || 999999) - Number(b.rank_order || 999999);
+      }
+      if (rightSort === "rank_desc") {
+        return Number(b.rank_order || 0) - Number(a.rank_order || 0);
+      }
+      if (rightSort === "amount_desc") {
+        return Number(b.amount || 0) - Number(a.amount || 0);
+      }
+      if (rightSort === "amount_asc") {
+        return Number(a.amount || 0) - Number(b.amount || 0);
+      }
+      return 0;
+    });
+
+  const selectedLandRightsFiltered = filteredRightsList.filter(
+    (item) => item.land === selectedLand
+  );
+
+  const filteredRightsTotalAmount = filteredRightsList.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+
+  const selectedLandRightsTotalAmount = selectedLandRightsFiltered.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+
+  const selectedLandCases = grouped[selectedLand] || [];
+
+  const COLORS = ["#ef4444", "#10b981", "#2563eb", "#f59e0b", "#8b5cf6", "#14b8a6", "#f97316"];
 
   const cardStyle = {
     background: "#ffffff",
@@ -703,7 +783,7 @@ export default function Home() {
         color: "#0f172a",
       }}
     >
-      <div style={{ maxWidth: 1600, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1650, margin: "0 auto" }}>
         <div
           style={{
             ...cardStyle,
@@ -740,11 +820,11 @@ export default function Home() {
               <button style={tabButton(activeTab === "cases")} onClick={() => setActiveTab("cases")}>
                 소송 관리
               </button>
-              <button
-                style={tabButton(activeTab === "rights")}
-                onClick={() => setActiveTab("rights")}
-              >
+              <button style={tabButton(activeTab === "rights")} onClick={() => setActiveTab("rights")}>
                 권리관계
+              </button>
+              <button style={tabButton(activeTab === "dashboard")} onClick={() => setActiveTab("dashboard")}>
+                대시보드
               </button>
             </div>
           </div>
@@ -792,31 +872,28 @@ export default function Home() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "360px 1fr",
-            gap: 24,
-            alignItems: "start",
-          }}
-        >
+        {activeTab === "dashboard" && (
           <div style={{ display: "grid", gap: 24 }}>
-            <div style={{ ...cardStyle, padding: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
-                {activeTab === "cases" ? "소송 진행 현황" : "권리관계 현황"}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+              <div style={{ ...cardStyle, padding: 24 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>소송 현황</div>
+                <PieChart width={420} height={300}>
+                  <Pie data={chartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                    {chartData.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
               </div>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <PieChart width={280} height={280}>
-                  <Pie
-                    data={activeTab === "cases" ? chartData : rightsChartData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    dataKey="value"
-                    label
-                  >
-                    {(activeTab === "cases" ? chartData : rightsChartData).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
+
+              <div style={{ ...cardStyle, padding: 24 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>권리 상태 현황</div>
+                <PieChart width={420} height={300}>
+                  <Pie data={rightsChartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                    {rightsChartData.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -825,699 +902,903 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ ...cardStyle, padding: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>지번 검색</div>
-              <input
-                style={inputStyle}
-                placeholder="지번 입력"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+              <div style={{ ...cardStyle, padding: 24 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>권리종류별 건수</div>
+                <PieChart width={420} height={300}>
+                  <Pie data={rightTypeChartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                    {rightTypeChartData.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </div>
 
-              <div style={{ marginTop: 16, maxHeight: 500, overflowY: "auto" }}>
-                {filteredLands.length === 0 ? (
-                  <div style={{ color: "#64748b", fontSize: 14 }}>검색 결과가 없습니다.</div>
-                ) : (
-                  filteredLands.map((land) => {
-                    const caseCount = grouped[land]?.length || 0;
-                    const rightCount = groupedRights[land]?.length || 0;
-                    const hasProgressCase = (grouped[land] || []).some((c) => c.status !== "종결");
-                    const hasActiveRight = (groupedRights[land] || []).some((r) => r.status !== "말소");
+              <div style={{ ...cardStyle, padding: 24 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>지번별 소송/권리 건수</div>
+                <BarChart width={520} height={300} data={landSummaryData.slice(0, 10)}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="cases" fill="#2563eb" name="소송" />
+                  <Bar dataKey="rights" fill="#10b981" name="권리" />
+                </BarChart>
+              </div>
+            </div>
+          </div>
+        )}
 
-                    return (
-                      <div
-                        key={land}
-                        onClick={() => setSelectedLand(land)}
-                        style={{
-                          padding: "14px 16px",
-                          borderRadius: 14,
-                          marginBottom: 10,
-                          cursor: "pointer",
-                          background: selectedLand === land ? "#e0e7ff" : "#f8fafc",
-                          border:
-                            selectedLand === land
-                              ? "1px solid #818cf8"
-                              : "1px solid #e5e7eb",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                          <div>
-                            <div style={{ fontWeight: 700 }}>{land}</div>
-                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                              소송 {caseCount}건 / 권리 {rightCount}건
+        {activeTab !== "dashboard" && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "360px 1fr",
+              gap: 24,
+              alignItems: "start",
+            }}
+          >
+            <div style={{ display: "grid", gap: 24 }}>
+              <div style={{ ...cardStyle, padding: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
+                  {activeTab === "cases" ? "소송 진행 현황" : "권리관계 현황"}
+                </div>
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <PieChart width={280} height={280}>
+                    <Pie
+                      data={activeTab === "cases" ? chartData : rightsChartData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      dataKey="value"
+                      label
+                    >
+                      {(activeTab === "cases" ? chartData : rightsChartData).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </div>
+              </div>
+
+              <div style={{ ...cardStyle, padding: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>지번 검색</div>
+                <input
+                  style={inputStyle}
+                  placeholder="지번 입력"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+
+                <div style={{ marginTop: 16, maxHeight: 500, overflowY: "auto" }}>
+                  {filteredLands.length === 0 ? (
+                    <div style={{ color: "#64748b", fontSize: 14 }}>검색 결과가 없습니다.</div>
+                  ) : (
+                    filteredLands.map((land) => {
+                      const caseCount = grouped[land]?.length || 0;
+                      const rightCount = groupedRights[land]?.length || 0;
+                      const hasProgressCase = (grouped[land] || []).some((c) => c.status !== "종결");
+                      const hasActiveRight = (groupedRights[land] || []).some((r) => r.status !== "말소");
+
+                      return (
+                        <div
+                          key={land}
+                          onClick={() => setSelectedLand(land)}
+                          style={{
+                            padding: "14px 16px",
+                            borderRadius: 14,
+                            marginBottom: 10,
+                            cursor: "pointer",
+                            background: selectedLand === land ? "#e0e7ff" : "#f8fafc",
+                            border: selectedLand === land ? "1px solid #818cf8" : "1px solid #e5e7eb",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{land}</div>
+                              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                소송 {caseCount}건 / 권리 {rightCount}건
+                              </div>
                             </div>
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <div
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: 999,
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: "#fff",
-                                background: hasProgressCase ? "#ef4444" : "#10b981",
-                                textAlign: "center",
-                              }}
-                            >
-                              {hasProgressCase ? "소송 진행" : "소송 종결"}
-                            </div>
-                            <div
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: 999,
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: "#fff",
-                                background: hasActiveRight ? "#2563eb" : "#94a3b8",
-                                textAlign: "center",
-                              }}
-                            >
-                              {hasActiveRight ? "권리 유효" : "권리 없음/말소"}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <div
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#fff",
+                                  background: hasProgressCase ? "#ef4444" : "#10b981",
+                                  textAlign: "center",
+                                }}
+                              >
+                                {hasProgressCase ? "소송 진행" : "소송 종결"}
+                              </div>
+                              <div
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#fff",
+                                  background: hasActiveRight ? "#2563eb" : "#94a3b8",
+                                  textAlign: "center",
+                                }}
+                              >
+                                {hasActiveRight ? "권리 유효" : "권리 없음/말소"}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle, padding: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>엑셀 업로드</div>
-
-              <div style={{ display: "grid", gap: 12 }}>
-                <div>
-                  <div style={{ ...labelStyle, marginBottom: 8 }}>소송 엑셀</div>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      handleExcelUpload("cases", file);
-                      e.target.value = "";
-                    }}
-                  />
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                    헤더 예시: 지번, 소송종류, 사건번호, 소가액, 법원, 담당자, 진행상황, 다음기일, 판결결과, 메모
-                  </div>
+                      );
+                    })
+                  )}
                 </div>
-
-                <div>
-                  <div style={{ ...labelStyle, marginBottom: 8 }}>권리관계 엑셀</div>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      handleExcelUpload("rights", file);
-                      e.target.value = "";
-                    }}
-                  />
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                    헤더 예시: 지번, 권리자, 권리종류, 순위, 금액, 설정일자, 말소일자, 상태, 메모
-                  </div>
-                </div>
-
-                {excelUploading && (
-                  <div style={{ color: "#f59e0b", fontSize: 13, fontWeight: 700 }}>
-                    엑셀 업로드 중...
-                  </div>
-                )}
               </div>
-            </div>
-          </div>
 
-          <div style={{ display: "grid", gap: 24 }}>
-            {activeTab === "cases" && (
-              <>
-                <div style={{ ...cardStyle, padding: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 18,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800 }}>
-                        {editingId ? "소송 수정" : "소송 등록"}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                        실무형 항목을 한 번에 입력할 수 있습니다.
-                      </div>
-                    </div>
-                  </div>
+              <div style={{ ...cardStyle, padding: 20 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>엑셀 업로드</div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: 16,
-                    }}
-                  >
-                    <div>
-                      <label style={labelStyle}>지번</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="지번"
-                        value={form.land}
-                        onChange={(e) => setForm({ ...form, land: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>소송종류</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="소송종류"
-                        value={form.type}
-                        onChange={(e) => setForm({ ...form, type: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>사건번호</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="사건번호"
-                        value={form.case_number}
-                        onChange={(e) => setForm({ ...form, case_number: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>소가액</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="소가액"
-                        value={form.claim_amount}
-                        onChange={(e) => setForm({ ...form, claim_amount: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>법원</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="법원"
-                        value={form.court}
-                        onChange={(e) => setForm({ ...form, court: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>담당자</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="담당자"
-                        value={form.assignee}
-                        onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>다음기일</label>
-                      <input
-                        style={inputStyle}
-                        type="date"
-                        value={form.next_date}
-                        onChange={(e) => setForm({ ...form, next_date: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>진행상황</label>
-                      <select
-                        style={inputStyle}
-                        value={form.status}
-                        onChange={(e) => setForm({ ...form, status: e.target.value })}
-                      >
-                        <option value="">진행상황 선택</option>
-                        <option value="진행중">진행중</option>
-                        <option value="1심">1심</option>
-                        <option value="2심">2심</option>
-                        <option value="3심">3심</option>
-                        <option value="항소">항소</option>
-                        <option value="종결">종결</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>판결결과</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="판결결과"
-                        value={form.judgment_result}
-                        onChange={(e) => setForm({ ...form, judgment_result: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 16 }}>
-                    <label style={labelStyle}>메모</label>
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
-                      placeholder="메모"
-                      value={form.memo}
-                      onChange={(e) => setForm({ ...form, memo: e.target.value })}
+                <div style={{ display: "grid", gap: 12 }}>
+                  <div>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>소송 엑셀</div>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        handleExcelUpload("cases", file);
+                        e.target.value = "";
+                      }}
                     />
-                  </div>
-
-                  <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
-                    {!editingId ? (
-                      <button style={buttonPrimary} onClick={addCase}>
-                        소송 추가
-                      </button>
-                    ) : (
-                      <>
-                        <button style={buttonPrimary} onClick={updateCase}>
-                          수정 저장
-                        </button>
-                        <button style={buttonSecondary} onClick={resetForm}>
-                          취소
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ ...cardStyle, padding: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 16,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800 }}>
-                        {selectedLand ? `${selectedLand} 소송 목록` : "소송 목록"}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                        지번을 선택하면 상세 소송 내역을 볼 수 있습니다.
-                      </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                      헤더 예시: 지번, 소송종류, 사건번호, 소가액, 법원, 담당자, 진행상황, 다음기일, 판결결과, 메모
                     </div>
                   </div>
 
-                  {!selectedLand ? (
-                    <div
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        borderRadius: 16,
-                        background: "#f8fafc",
-                        border: "1px dashed #cbd5e1",
-                        color: "#64748b",
+                  <div>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>권리관계 엑셀</div>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        handleExcelUpload("rights", file);
+                        e.target.value = "";
                       }}
-                    >
-                      왼쪽에서 지번을 선택해주세요.
+                    />
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                      헤더 예시: 지번, 권리자, 권리종류, 순위, 금액, 설정일자, 말소일자, 상태, 메모
                     </div>
-                  ) : !(grouped[selectedLand] || []).length ? (
-                    <div
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        borderRadius: 16,
-                        background: "#f8fafc",
-                        border: "1px dashed #cbd5e1",
-                        color: "#64748b",
-                      }}
-                    >
-                      해당 지번의 소송 데이터가 없습니다.
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table
-                        style={{
-                          width: "100%",
-                          borderCollapse: "separate",
-                          borderSpacing: 0,
-                          fontSize: 14,
-                        }}
-                      >
-                        <thead>
-                          <tr style={{ background: "#f8fafc" }}>
-                            <th style={thStyle}>소송종류</th>
-                            <th style={thStyle}>사건번호</th>
-                            <th style={thStyle}>소가액</th>
-                            <th style={thStyle}>법원</th>
-                            <th style={thStyle}>담당자</th>
-                            <th style={thStyle}>진행상황</th>
-                            <th style={thStyle}>다음기일</th>
-                            <th style={thStyle}>판결결과</th>
-                            <th style={thStyle}>메모</th>
-                            <th style={thStyle}>첨부파일</th>
-                            <th style={thStyle}>업로드</th>
-                            <th style={thStyle}>수정</th>
-                            <th style={thStyle}>삭제</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {grouped[selectedLand].map((c) => (
-                            <tr key={c.id}>
-                              <td style={tdStyle}>{c.type}</td>
-                              <td style={tdStyle}>{c.case_number || "-"}</td>
-                              <td style={tdStyle}>{c.claim_amount || "-"}</td>
-                              <td style={tdStyle}>{c.court || "-"}</td>
-                              <td style={tdStyle}>{c.assignee || "-"}</td>
-                              <td
-                                style={{
-                                  ...tdStyle,
-                                  fontWeight: 700,
-                                  color:
-                                    c.status === "종결"
-                                      ? "#10b981"
-                                      : c.status === "진행중"
-                                      ? "#ef4444"
-                                      : "#0f172a",
-                                }}
-                              >
-                                {c.status}
-                              </td>
-                              <td
-                                style={{
-                                  ...tdStyle,
-                                  color:
-                                    c.next_date &&
-                                    new Date(c.next_date) <
-                                      new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-                                      ? "#f59e0b"
-                                      : "#0f172a",
-                                  fontWeight:
-                                    c.next_date &&
-                                    new Date(c.next_date) <
-                                      new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-                                      ? 700
-                                      : 400,
-                                }}
-                              >
-                                {c.next_date || "-"}
-                              </td>
-                              <td style={tdStyle}>{c.judgment_result || "-"}</td>
-                              <td style={{ ...tdStyle, minWidth: 180 }}>{c.memo || "-"}</td>
-                              <td style={tdStyle}>
-                                {c.file_url ? (
-                                  <a href={c.file_url} target="_blank" rel="noreferrer">
-                                    파일 보기
-                                  </a>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td style={tdStyle}>
-                                <input
-                                  type="file"
-                                  onChange={(e) => handleFileUpload(c.id, e.target.files[0])}
-                                />
-                                {uploadingId === c.id && (
-                                  <div style={{ color: "#f59e0b", marginTop: 6, fontSize: 12 }}>
-                                    업로드 중...
-                                  </div>
-                                )}
-                              </td>
-                              <td style={tdStyle}>
-                                <button style={buttonEdit} onClick={() => startEditCase(c)}>
-                                  수정
-                                </button>
-                              </td>
-                              <td style={tdStyle}>
-                                <button style={buttonDanger} onClick={() => deleteCase(c.id)}>
-                                  삭제
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  </div>
+
+                  {excelUploading && (
+                    <div style={{ color: "#f59e0b", fontSize: 13, fontWeight: 700 }}>
+                      엑셀 업로드 중...
                     </div>
                   )}
                 </div>
-              </>
-            )}
+              </div>
 
-            {activeTab === "rights" && (
-              <>
-                <div style={{ ...cardStyle, padding: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 18,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800 }}>
-                        {editingRightId ? "권리관계 수정" : "권리관계 등록"}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                        rights 테이블 기준으로 권리관계를 관리합니다.
-                      </div>
-                    </div>
+              {selectedLand && (
+                <div style={{ ...cardStyle, padding: 20 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
+                    선택 지번 통합 요약
                   </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: 16,
-                    }}
-                  >
-                    <div>
-                      <label style={labelStyle}>지번</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="지번"
-                        value={rightForm.land}
-                        onChange={(e) => setRightForm({ ...rightForm, land: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>권리자</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="권리자"
-                        value={rightForm.right_holder}
-                        onChange={(e) =>
-                          setRightForm({ ...rightForm, right_holder: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>권리종류</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="권리종류"
-                        value={rightForm.right_type}
-                        onChange={(e) =>
-                          setRightForm({ ...rightForm, right_type: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>순위</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="순위"
-                        value={rightForm.rank_order}
-                        onChange={(e) =>
-                          setRightForm({ ...rightForm, rank_order: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>금액</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="금액"
-                        value={rightForm.amount}
-                        onChange={(e) => setRightForm({ ...rightForm, amount: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>상태</label>
-                      <select
-                        style={inputStyle}
-                        value={rightForm.status}
-                        onChange={(e) => setRightForm({ ...rightForm, status: e.target.value })}
-                      >
-                        <option value="유효">유효</option>
-                        <option value="말소">말소</option>
-                        <option value="변경">변경</option>
-                        <option value="검토필요">검토필요</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>설정일자</label>
-                      <input
-                        style={inputStyle}
-                        type="date"
-                        value={rightForm.registration_date}
-                        onChange={(e) =>
-                          setRightForm({ ...rightForm, registration_date: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label style={labelStyle}>말소일자</label>
-                      <input
-                        style={inputStyle}
-                        type="date"
-                        value={rightForm.cancellation_date}
-                        onChange={(e) =>
-                          setRightForm({ ...rightForm, cancellation_date: e.target.value })
-                        }
-                      />
-                    </div>
+                  <div style={{ fontSize: 14, color: "#475569", marginBottom: 10 }}>
+                    지번: <b>{selectedLand}</b>
                   </div>
-
-                  <div style={{ marginTop: 16 }}>
-                    <label style={labelStyle}>메모</label>
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
-                      placeholder="메모"
-                      value={rightForm.memo}
-                      onChange={(e) => setRightForm({ ...rightForm, memo: e.target.value })}
-                    />
-                  </div>
-
-                  <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
-                    {!editingRightId ? (
-                      <button style={buttonPrimary} onClick={addRight}>
-                        권리관계 추가
-                      </button>
-                    ) : (
-                      <>
-                        <button style={buttonPrimary} onClick={updateRight}>
-                          수정 저장
-                        </button>
-                        <button style={buttonSecondary} onClick={resetRightForm}>
-                          취소
-                        </button>
-                      </>
-                    )}
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <div>소송 수: <b>{selectedLandCases.length}</b>건</div>
+                    <div>권리 수: <b>{selectedLandRightsFiltered.length}</b>건</div>
+                    <div>권리 총액: <b>{selectedLandRightsTotalAmount.toLocaleString()}</b>원</div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                <div style={{ ...cardStyle, padding: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 16,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800 }}>
-                        {selectedLand ? `${selectedLand} 권리관계 목록` : "권리관계 목록"}
+            <div style={{ display: "grid", gap: 24 }}>
+              {activeTab === "cases" && (
+                <>
+                  <div style={{ ...cardStyle, padding: 24 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 18,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 800 }}>
+                          {editingId ? "소송 수정" : "소송 등록"}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          실무형 항목을 한 번에 입력할 수 있습니다.
+                        </div>
                       </div>
-                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                        지번을 선택하면 상세 권리관계 내역을 볼 수 있습니다.
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 16,
+                      }}
+                    >
+                      <div>
+                        <label style={labelStyle}>지번</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="지번"
+                          value={form.land}
+                          onChange={(e) => setForm({ ...form, land: e.target.value })}
+                        />
                       </div>
+
+                      <div>
+                        <label style={labelStyle}>소송종류</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="소송종류"
+                          value={form.type}
+                          onChange={(e) => setForm({ ...form, type: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>사건번호</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="사건번호"
+                          value={form.case_number}
+                          onChange={(e) => setForm({ ...form, case_number: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>소가액</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="소가액"
+                          value={form.claim_amount}
+                          onChange={(e) => setForm({ ...form, claim_amount: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>법원</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="법원"
+                          value={form.court}
+                          onChange={(e) => setForm({ ...form, court: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>담당자</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="담당자"
+                          value={form.assignee}
+                          onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>다음기일</label>
+                        <input
+                          style={inputStyle}
+                          type="date"
+                          value={form.next_date}
+                          onChange={(e) => setForm({ ...form, next_date: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>진행상황</label>
+                        <select
+                          style={inputStyle}
+                          value={form.status}
+                          onChange={(e) => setForm({ ...form, status: e.target.value })}
+                        >
+                          <option value="">진행상황 선택</option>
+                          <option value="진행중">진행중</option>
+                          <option value="1심">1심</option>
+                          <option value="2심">2심</option>
+                          <option value="3심">3심</option>
+                          <option value="항소">항소</option>
+                          <option value="종결">종결</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>판결결과</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="판결결과"
+                          value={form.judgment_result}
+                          onChange={(e) => setForm({ ...form, judgment_result: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 16 }}>
+                      <label style={labelStyle}>메모</label>
+                      <textarea
+                        style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
+                        placeholder="메모"
+                        value={form.memo}
+                        onChange={(e) => setForm({ ...form, memo: e.target.value })}
+                      />
+                    </div>
+
+                    <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
+                      {!editingId ? (
+                        <button style={buttonPrimary} onClick={addCase}>
+                          소송 추가
+                        </button>
+                      ) : (
+                        <>
+                          <button style={buttonPrimary} onClick={updateCase}>
+                            수정 저장
+                          </button>
+                          <button style={buttonSecondary} onClick={resetForm}>
+                            취소
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {!selectedLand ? (
+                  <div style={{ ...cardStyle, padding: 24 }}>
                     <div
                       style={{
-                        padding: 40,
-                        textAlign: "center",
-                        borderRadius: 16,
-                        background: "#f8fafc",
-                        border: "1px dashed #cbd5e1",
-                        color: "#64748b",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 16,
                       }}
                     >
-                      왼쪽에서 지번을 선택해주세요.
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 800 }}>
+                          {selectedLand ? `${selectedLand} 소송 목록` : "소송 목록"}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          지번을 선택하면 상세 소송 내역을 볼 수 있습니다.
+                        </div>
+                      </div>
                     </div>
-                  ) : !(groupedRights[selectedLand] || []).length ? (
-                    <div
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        borderRadius: 16,
-                        background: "#f8fafc",
-                        border: "1px dashed #cbd5e1",
-                        color: "#64748b",
-                      }}
-                    >
-                      해당 지번의 권리관계 데이터가 없습니다.
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table
+
+                    {!selectedLand ? (
+                      <div
                         style={{
-                          width: "100%",
-                          borderCollapse: "separate",
-                          borderSpacing: 0,
-                          fontSize: 14,
+                          padding: 40,
+                          textAlign: "center",
+                          borderRadius: 16,
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          color: "#64748b",
                         }}
                       >
-                        <thead>
-                          <tr style={{ background: "#f8fafc" }}>
-                            <th style={thStyle}>권리자</th>
-                            <th style={thStyle}>권리종류</th>
-                            <th style={thStyle}>순위</th>
-                            <th style={thStyle}>금액</th>
-                            <th style={thStyle}>설정일자</th>
-                            <th style={thStyle}>말소일자</th>
-                            <th style={thStyle}>상태</th>
-                            <th style={thStyle}>메모</th>
-                            <th style={thStyle}>수정</th>
-                            <th style={thStyle}>삭제</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(groupedRights[selectedLand] || []).map((r) => (
-                            <tr key={r.id}>
-                              <td style={tdStyle}>{r.right_holder || "-"}</td>
-                              <td style={tdStyle}>{r.right_type || "-"}</td>
-                              <td style={tdStyle}>{r.rank_order || "-"}</td>
-                              <td style={tdStyle}>{r.amount || "-"}</td>
-                              <td style={tdStyle}>{r.registration_date || "-"}</td>
-                              <td style={tdStyle}>{r.cancellation_date || "-"}</td>
-                              <td
-                                style={{
-                                  ...tdStyle,
-                                  fontWeight: 700,
-                                  color: r.status === "말소" ? "#94a3b8" : "#2563eb",
-                                }}
-                              >
-                                {r.status || "-"}
-                              </td>
-                              <td style={{ ...tdStyle, minWidth: 180 }}>{r.memo || "-"}</td>
-                              <td style={tdStyle}>
-                                <button style={buttonEdit} onClick={() => startEditRight(r)}>
-                                  수정
-                                </button>
-                              </td>
-                              <td style={tdStyle}>
-                                <button style={buttonDanger} onClick={() => deleteRight(r.id)}>
-                                  삭제
-                                </button>
-                              </td>
+                        왼쪽에서 지번을 선택해주세요.
+                      </div>
+                    ) : !selectedLandCases.length ? (
+                      <div
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          borderRadius: 16,
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          color: "#64748b",
+                        }}
+                      >
+                        해당 지번의 소송 데이터가 없습니다.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "separate",
+                            borderSpacing: 0,
+                            fontSize: 14,
+                          }}
+                        >
+                          <thead>
+                            <tr style={{ background: "#f8fafc" }}>
+                              <th style={thStyle}>소송종류</th>
+                              <th style={thStyle}>사건번호</th>
+                              <th style={thStyle}>소가액</th>
+                              <th style={thStyle}>법원</th>
+                              <th style={thStyle}>담당자</th>
+                              <th style={thStyle}>진행상황</th>
+                              <th style={thStyle}>다음기일</th>
+                              <th style={thStyle}>판결결과</th>
+                              <th style={thStyle}>메모</th>
+                              <th style={thStyle}>첨부파일</th>
+                              <th style={thStyle}>업로드</th>
+                              <th style={thStyle}>수정</th>
+                              <th style={thStyle}>삭제</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {selectedLandCases.map((c) => (
+                              <tr key={c.id}>
+                                <td style={tdStyle}>{c.type}</td>
+                                <td style={tdStyle}>{c.case_number || "-"}</td>
+                                <td style={tdStyle}>{c.claim_amount || "-"}</td>
+                                <td style={tdStyle}>{c.court || "-"}</td>
+                                <td style={tdStyle}>{c.assignee || "-"}</td>
+                                <td
+                                  style={{
+                                    ...tdStyle,
+                                    fontWeight: 700,
+                                    color:
+                                      c.status === "종결"
+                                        ? "#10b981"
+                                        : c.status === "진행중"
+                                        ? "#ef4444"
+                                        : "#0f172a",
+                                  }}
+                                >
+                                  {c.status}
+                                </td>
+                                <td
+                                  style={{
+                                    ...tdStyle,
+                                    color:
+                                      c.next_date &&
+                                      new Date(c.next_date) <
+                                        new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+                                        ? "#f59e0b"
+                                        : "#0f172a",
+                                    fontWeight:
+                                      c.next_date &&
+                                      new Date(c.next_date) <
+                                        new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+                                        ? 700
+                                        : 400,
+                                  }}
+                                >
+                                  {c.next_date || "-"}
+                                </td>
+                                <td style={tdStyle}>{c.judgment_result || "-"}</td>
+                                <td style={{ ...tdStyle, minWidth: 180 }}>{c.memo || "-"}</td>
+                                <td style={tdStyle}>
+                                  {c.file_url ? (
+                                    <a href={c.file_url} target="_blank" rel="noreferrer">
+                                      파일 보기
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td style={tdStyle}>
+                                  <input
+                                    type="file"
+                                    onChange={(e) => handleFileUpload(c.id, e.target.files[0])}
+                                  />
+                                  {uploadingId === c.id && (
+                                    <div style={{ color: "#f59e0b", marginTop: 6, fontSize: 12 }}>
+                                      업로드 중...
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={tdStyle}>
+                                  <button style={buttonEdit} onClick={() => startEditCase(c)}>
+                                    수정
+                                  </button>
+                                </td>
+                                <td style={tdStyle}>
+                                  <button style={buttonDanger} onClick={() => deleteCase(c.id)}>
+                                    삭제
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {activeTab === "rights" && (
+                <>
+                  <div style={{ ...cardStyle, padding: 24 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 18,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 800 }}>
+                          {editingRightId ? "권리관계 수정" : "권리관계 등록"}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          rights 테이블 기준으로 권리관계를 관리합니다.
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </>
-            )}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 16,
+                      }}
+                    >
+                      <div>
+                        <label style={labelStyle}>지번</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="지번"
+                          value={rightForm.land}
+                          onChange={(e) => setRightForm({ ...rightForm, land: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>권리자</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="권리자"
+                          value={rightForm.right_holder}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, right_holder: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>권리종류</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="권리종류"
+                          value={rightForm.right_type}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, right_type: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>순위</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="순위"
+                          value={rightForm.rank_order}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, rank_order: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>금액</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="금액"
+                          value={rightForm.amount}
+                          onChange={(e) => setRightForm({ ...rightForm, amount: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>상태</label>
+                        <select
+                          style={inputStyle}
+                          value={rightForm.status}
+                          onChange={(e) => setRightForm({ ...rightForm, status: e.target.value })}
+                        >
+                          <option value="유효">유효</option>
+                          <option value="말소">말소</option>
+                          <option value="변경">변경</option>
+                          <option value="검토필요">검토필요</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>설정일자</label>
+                        <input
+                          style={inputStyle}
+                          type="date"
+                          value={rightForm.registration_date}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, registration_date: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>말소일자</label>
+                        <input
+                          style={inputStyle}
+                          type="date"
+                          value={rightForm.cancellation_date}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, cancellation_date: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 16 }}>
+                      <label style={labelStyle}>메모</label>
+                      <textarea
+                        style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
+                        placeholder="메모"
+                        value={rightForm.memo}
+                        onChange={(e) => setRightForm({ ...rightForm, memo: e.target.value })}
+                      />
+                    </div>
+
+                    <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
+                      {!editingRightId ? (
+                        <button style={buttonPrimary} onClick={addRight}>
+                          권리관계 추가
+                        </button>
+                      ) : (
+                        <>
+                          <button style={buttonPrimary} onClick={updateRight}>
+                            수정 저장
+                          </button>
+                          <button style={buttonSecondary} onClick={resetRightForm}>
+                            취소
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ ...cardStyle, padding: 24 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 16,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 800 }}>
+                          {selectedLand ? `${selectedLand} 권리관계 목록` : "권리관계 목록"}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          지번을 선택하면 상세 권리관계 내역을 볼 수 있습니다.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                        gap: 12,
+                        marginBottom: 18,
+                        padding: 16,
+                        background: "#f8fafc",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 16,
+                      }}
+                    >
+                      <div>
+                        <label style={labelStyle}>지번 필터</label>
+                        <input
+                          style={inputStyle}
+                          placeholder="지번 검색"
+                          value={rightLandFilter}
+                          onChange={(e) => setRightLandFilter(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>권리종류 필터</label>
+                        <select
+                          style={inputStyle}
+                          value={rightTypeFilter}
+                          onChange={(e) => setRightTypeFilter(e.target.value)}
+                        >
+                          {RIGHT_TYPE_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>상태 필터</label>
+                        <select
+                          style={inputStyle}
+                          value={rightStatusFilter}
+                          onChange={(e) => setRightStatusFilter(e.target.value)}
+                        >
+                          {RIGHT_STATUS_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>정렬</label>
+                        <select
+                          style={inputStyle}
+                          value={rightSort}
+                          onChange={(e) => setRightSort(e.target.value)}
+                        >
+                          <option value="rank_asc">순위 오름차순</option>
+                          <option value="rank_desc">순위 내림차순</option>
+                          <option value="amount_desc">금액 큰 순</option>
+                          <option value="amount_asc">금액 작은 순</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 12,
+                        marginBottom: 20,
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: 16,
+                          borderRadius: 14,
+                          background: "#eff6ff",
+                          border: "1px solid #bfdbfe",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: "#1d4ed8", fontWeight: 700 }}>
+                          필터 적용 총 건수
+                        </div>
+                        <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
+                          {filteredRightsList.length}건
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: 16,
+                          borderRadius: 14,
+                          background: "#ecfeff",
+                          border: "1px solid #a5f3fc",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: "#0f766e", fontWeight: 700 }}>
+                          필터 적용 총 금액
+                        </div>
+                        <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
+                          {filteredRightsTotalAmount.toLocaleString()}원
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: 16,
+                          borderRadius: 14,
+                          background: "#f5f3ff",
+                          border: "1px solid #ddd6fe",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: "#6d28d9", fontWeight: 700 }}>
+                          선택 지번 권리 총액
+                        </div>
+                        <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
+                          {selectedLandRightsTotalAmount.toLocaleString()}원
+                        </div>
+                      </div>
+                    </div>
+
+                    {!selectedLand ? (
+                      <div
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          borderRadius: 16,
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          color: "#64748b",
+                        }}
+                      >
+                        왼쪽에서 지번을 선택해주세요.
+                      </div>
+                    ) : !selectedLandRightsFiltered.length ? (
+                      <div
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          borderRadius: 16,
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          color: "#64748b",
+                        }}
+                      >
+                        해당 조건의 권리관계 데이터가 없습니다.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "separate",
+                            borderSpacing: 0,
+                            fontSize: 14,
+                          }}
+                        >
+                          <thead>
+                            <tr style={{ background: "#f8fafc" }}>
+                              <th style={thStyle}>권리자</th>
+                              <th style={thStyle}>권리종류</th>
+                              <th style={thStyle}>순위</th>
+                              <th style={thStyle}>금액</th>
+                              <th style={thStyle}>설정일자</th>
+                              <th style={thStyle}>말소일자</th>
+                              <th style={thStyle}>상태</th>
+                              <th style={thStyle}>메모</th>
+                              <th style={thStyle}>수정</th>
+                              <th style={thStyle}>삭제</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedLandRightsFiltered.map((r) => (
+                              <tr key={r.id}>
+                                <td style={tdStyle}>{r.right_holder || "-"}</td>
+                                <td style={tdStyle}>{r.right_type || "-"}</td>
+                                <td style={tdStyle}>{r.rank_order || "-"}</td>
+                                <td style={tdStyle}>
+                                  {r.amount ? Number(r.amount).toLocaleString() : "-"}
+                                </td>
+                                <td style={tdStyle}>{r.registration_date || "-"}</td>
+                                <td style={tdStyle}>{r.cancellation_date || "-"}</td>
+                                <td
+                                  style={{
+                                    ...tdStyle,
+                                    fontWeight: 700,
+                                    color: r.status === "말소" ? "#94a3b8" : "#2563eb",
+                                  }}
+                                >
+                                  {r.status || "-"}
+                                </td>
+                                <td style={{ ...tdStyle, minWidth: 180 }}>{r.memo || "-"}</td>
+                                <td style={tdStyle}>
+                                  <button style={buttonEdit} onClick={() => startEditRight(r)}>
+                                    수정
+                                  </button>
+                                </td>
+                                <td style={tdStyle}>
+                                  <button style={buttonDanger} onClick={() => deleteRight(r.id)}>
+                                    삭제
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
