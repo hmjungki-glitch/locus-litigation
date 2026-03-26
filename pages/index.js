@@ -78,6 +78,10 @@ const [form, setForm] = useState({
 const total = cases.length;
 const inProgress = cases.filter(c => c.status !== "종결").length;
 const done = cases.filter(c => c.status === "종결").length;
+const urgent = cases.filter(c => {
+  if (!c.next_date) return false;
+  return new Date(c.next_date) < new Date(Date.now() + 3*24*60*60*1000);
+}).length;
 
 const urgent = cases.filter(c => {
   if (!c.next_date) return false;
