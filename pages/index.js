@@ -82,7 +82,7 @@ const chartData = [
   { name: "종결", value: done }
 ];
 
-const COLORS = ["#0088FE", "#00C49F"];
+const COLORS = ["#FF0000", "#00C49F"];
 
   return (
     <div style={{ padding: 40 }}>
