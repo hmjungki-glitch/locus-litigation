@@ -182,6 +182,7 @@ const COLORS = ["#FF0000", "#00C49F"];
     <tr>
       <th>소송종류</th>
       <th>진행상황</th>
+      <th>다음기일</th>  
     </tr>
   </thead>
   <tbody>
