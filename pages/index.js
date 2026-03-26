@@ -199,6 +199,7 @@ const COLORS = ["#FF0000", "#00C49F"];
 }}>
   {c.status}
 </td>
+<td>{c.next_date || "-"}</td>                               
       </tr>
     ))}
   </tbody>
