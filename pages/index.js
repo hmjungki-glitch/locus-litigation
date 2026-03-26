@@ -1,5 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 
@@ -14,13 +25,22 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-const RIGHT_TYPE_OPTIONS = ["전체", "근저당권", "가압류", "전세권", "가등기", "압류", "기타"];
+const RIGHT_TYPE_OPTIONS = [
+  "전체",
+  "근저당권",
+  "가압류",
+  "전세권",
+  "가등기",
+  "압류",
+  "기타",
+];
 const RIGHT_STATUS_OPTIONS = ["전체", "유효", "말소", "변경", "검토필요"];
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
+  const [rememberId, setRememberId] = useState(false);
 
   const [activeTab, setActiveTab] = useState("cases");
 
@@ -68,6 +88,14 @@ export default function Home() {
   const [form, setForm] = useState(emptyForm);
   const [rightForm, setRightForm] = useState(emptyRightForm);
 
+  useEffect(() => {
+    const savedId = localStorage.getItem("savedLoginId");
+    if (savedId) {
+      setId(savedId);
+      setRememberId(true);
+    }
+  }, []);
+
   const login = async () => {
     if (id !== "adminlocus" || pw !== "Locus123!@#") {
       alert("로그인 실패");
@@ -77,6 +105,12 @@ export default function Home() {
     if (!supabaseUrl || !supabaseAnonKey) {
       alert("Vercel 환경변수 설정이 필요합니다.");
       return;
+    }
+
+    if (rememberId) {
+      localStorage.setItem("savedLoginId", id);
+    } else {
+      localStorage.removeItem("savedLoginId");
     }
 
     setLoggedIn(true);
@@ -383,7 +417,9 @@ export default function Home() {
   const getValueByAliases = (row, aliases) => {
     const entries = Object.entries(row || {});
     for (const alias of aliases) {
-      const found = entries.find(([key]) => normalizeKey(key) === normalizeKey(alias));
+      const found = entries.find(
+        ([key]) => normalizeKey(key) === normalizeKey(alias)
+      );
       if (found) return found[1];
     }
     return "";
@@ -442,20 +478,27 @@ export default function Home() {
           .map((row) => ({
             land: getValueByAliases(row, ["land", "지번"]),
             type: getValueByAliases(row, ["type", "소송종류"]),
-            case_number: getValueByAliases(row, ["case_number", "사건번호"]) || null,
-            claim_amount: getValueByAliases(row, ["claim_amount", "소가액"]) || null,
+            case_number:
+              getValueByAliases(row, ["case_number", "사건번호"]) || null,
+            claim_amount:
+              getValueByAliases(row, ["claim_amount", "소가액"]) || null,
             court: getValueByAliases(row, ["court", "법원"]) || null,
             assignee: getValueByAliases(row, ["assignee", "담당자"]) || null,
             status: getValueByAliases(row, ["status", "진행상황"]) || null,
-            next_date: normalizeDateValue(getValueByAliases(row, ["next_date", "다음기일"])),
-            judgment_result: getValueByAliases(row, ["judgment_result", "판결결과"]) || null,
+            next_date: normalizeDateValue(
+              getValueByAliases(row, ["next_date", "다음기일"])
+            ),
+            judgment_result:
+              getValueByAliases(row, ["judgment_result", "판결결과"]) || null,
             memo: getValueByAliases(row, ["memo", "메모"]) || null,
             file_url: getValueByAliases(row, ["file_url", "파일URL"]) || null,
           }))
           .filter((item) => item.land && item.type && item.status);
 
         if (!payload.length) {
-          alert("업로드 가능한 소송 데이터가 없습니다. 필수값: 지번, 소송종류, 진행상황");
+          alert(
+            "업로드 가능한 소송 데이터가 없습니다. 필수값: 지번, 소송종류, 진행상황"
+          );
           return;
         }
 
@@ -474,8 +517,10 @@ export default function Home() {
         const payload = rows
           .map((row) => ({
             land: getValueByAliases(row, ["land", "지번"]),
-            right_holder: getValueByAliases(row, ["right_holder", "권리자"]) || null,
-            right_type: getValueByAliases(row, ["right_type", "권리종류"]) || null,
+            right_holder:
+              getValueByAliases(row, ["right_holder", "권리자"]) || null,
+            right_type:
+              getValueByAliases(row, ["right_type", "권리종류"]) || null,
             rank_order: getValueByAliases(row, ["rank_order", "순위"])
               ? Number(getValueByAliases(row, ["rank_order", "순위"]))
               : null,
@@ -483,7 +528,11 @@ export default function Home() {
               ? Number(getValueByAliases(row, ["amount", "금액"]))
               : null,
             registration_date: normalizeDateValue(
-              getValueByAliases(row, ["registration_date", "설정일자", "등록일자"])
+              getValueByAliases(row, [
+                "registration_date",
+                "설정일자",
+                "등록일자",
+              ])
             ),
             cancellation_date: normalizeDateValue(
               getValueByAliases(row, ["cancellation_date", "말소일자"])
@@ -494,7 +543,9 @@ export default function Home() {
           .filter((item) => item.land && item.right_type && item.status);
 
         if (!payload.length) {
-          alert("업로드 가능한 권리관계 데이터가 없습니다. 필수값: 지번, 권리종류, 상태");
+          alert(
+            "업로드 가능한 권리관계 데이터가 없습니다. 필수값: 지번, 권리종류, 상태"
+          );
           return;
         }
 
@@ -633,7 +684,15 @@ export default function Home() {
 
   const selectedLandCases = grouped[selectedLand] || [];
 
-  const COLORS = ["#ef4444", "#10b981", "#2563eb", "#f59e0b", "#8b5cf6", "#14b8a6", "#f97316"];
+  const COLORS = [
+    "#ef4444",
+    "#10b981",
+    "#2563eb",
+    "#f59e0b",
+    "#8b5cf6",
+    "#14b8a6",
+    "#f97316",
+  ];
 
   const cardStyle = {
     background: "#ffffff",
@@ -715,7 +774,8 @@ export default function Home() {
       <div
         style={{
           minHeight: "100vh",
-          background: "linear-gradient(135deg, #eff6ff 0%, #f8fafc 45%, #ecfeff 100%)",
+          background:
+            "linear-gradient(135deg, #eff6ff 0%, #f8fafc 45%, #ecfeff 100%)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -734,7 +794,14 @@ export default function Home() {
           }}
         >
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 13, color: "#2563eb", fontWeight: 700, marginBottom: 8 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: "#2563eb",
+                fontWeight: 700,
+                marginBottom: 8,
+              }}
+            >
               LOCUS LEGAL DASHBOARD
             </div>
             <h2 style={{ margin: 0, fontSize: 28, color: "#0f172a" }}>
@@ -752,6 +819,9 @@ export default function Home() {
               placeholder="ID"
               value={id}
               onChange={(e) => setId(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") login();
+              }}
             />
           </div>
 
@@ -763,7 +833,32 @@ export default function Home() {
               type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") login();
+              }}
             />
+          </div>
+
+          <div
+            style={{
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <input
+              type="checkbox"
+              id="rememberId"
+              checked={rememberId}
+              onChange={(e) => setRememberId(e.target.checked)}
+            />
+            <label
+              htmlFor="rememberId"
+              style={{ fontSize: 14, color: "#475569", cursor: "pointer" }}
+            >
+              아이디 저장
+            </label>
           </div>
 
           <button style={{ ...buttonPrimary, width: "100%" }} onClick={login}>
@@ -805,25 +900,47 @@ export default function Home() {
             }}
           >
             <div>
-              <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 10, fontWeight: 700 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  opacity: 0.85,
+                  marginBottom: 10,
+                  fontWeight: 700,
+                }}
+              >
                 PROJECT LEGAL MANAGEMENT
               </div>
               <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.25 }}>
                 동작구 본동 개발사업 소송관리
               </h1>
-              <p style={{ marginTop: 10, marginBottom: 0, color: "rgba(255,255,255,0.82)" }}>
+              <p
+                style={{
+                  marginTop: 10,
+                  marginBottom: 0,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
                 소송, 권리관계, 기일, 첨부파일, 엑셀 업로드를 한 화면에서 관리하는 내부 시스템
               </p>
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button style={tabButton(activeTab === "cases")} onClick={() => setActiveTab("cases")}>
+              <button
+                style={tabButton(activeTab === "cases")}
+                onClick={() => setActiveTab("cases")}
+              >
                 소송 관리
               </button>
-              <button style={tabButton(activeTab === "rights")} onClick={() => setActiveTab("rights")}>
+              <button
+                style={tabButton(activeTab === "rights")}
+                onClick={() => setActiveTab("rights")}
+              >
                 권리관계
               </button>
-              <button style={tabButton(activeTab === "dashboard")} onClick={() => setActiveTab("dashboard")}>
+              <button
+                style={tabButton(activeTab === "dashboard")}
+                onClick={() => setActiveTab("dashboard")}
+              >
                 대시보드
               </button>
             </div>
@@ -839,34 +956,78 @@ export default function Home() {
           }}
         >
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>전체 소송</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>{total}</div>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              전체 소송
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>
+              {total}
+            </div>
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>진행중</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8, color: "#ef4444" }}>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              진행중
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 800,
+                marginTop: 8,
+                color: "#ef4444",
+              }}
+            >
               {inProgress}
             </div>
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>종결</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8, color: "#10b981" }}>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              종결
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 800,
+                marginTop: 8,
+                color: "#10b981",
+              }}
+            >
               {done}
             </div>
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>임박 기일</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8, color: "#f59e0b" }}>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              임박 기일
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 800,
+                marginTop: 8,
+                color: "#f59e0b",
+              }}
+            >
               {urgent}
             </div>
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>전체 권리관계</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>{totalRights}</div>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              전체 권리관계
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>
+              {totalRights}
+            </div>
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
-            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>유효 권리</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8, color: "#2563eb" }}>
+            <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+              유효 권리
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 800,
+                marginTop: 8,
+                color: "#2563eb",
+              }}
+            >
               {activeRights}
             </div>
           </div>
@@ -874,13 +1035,31 @@ export default function Home() {
 
         {activeTab === "dashboard" && (
           <div style={{ display: "grid", gap: 24 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+              }}
+            >
               <div style={{ ...cardStyle, padding: 24 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>소송 현황</div>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  소송 현황
+                </div>
                 <PieChart width={420} height={300}>
-                  <Pie data={chartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="value"
+                    label
+                  >
                     {chartData.map((entry, index) => (
-                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                      <Cell
+                        key={entry.name}
+                        fill={COLORS[index % COLORS.length]}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -889,11 +1068,23 @@ export default function Home() {
               </div>
 
               <div style={{ ...cardStyle, padding: 24 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>권리 상태 현황</div>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  권리 상태 현황
+                </div>
                 <PieChart width={420} height={300}>
-                  <Pie data={rightsChartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                  <Pie
+                    data={rightsChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="value"
+                    label
+                  >
                     {rightsChartData.map((entry, index) => (
-                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                      <Cell
+                        key={entry.name}
+                        fill={COLORS[index % COLORS.length]}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -902,13 +1093,31 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+              }}
+            >
               <div style={{ ...cardStyle, padding: 24 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>권리종류별 건수</div>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  권리종류별 건수
+                </div>
                 <PieChart width={420} height={300}>
-                  <Pie data={rightTypeChartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label>
+                  <Pie
+                    data={rightTypeChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="value"
+                    label
+                  >
                     {rightTypeChartData.map((entry, index) => (
-                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                      <Cell
+                        key={entry.name}
+                        fill={COLORS[index % COLORS.length]}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -917,7 +1126,9 @@ export default function Home() {
               </div>
 
               <div style={{ ...cardStyle, padding: 24 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>지번별 소송/권리 건수</div>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
+                  지번별 소송/권리 건수
+                </div>
                 <BarChart width={520} height={300} data={landSummaryData.slice(0, 10)}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
@@ -956,9 +1167,14 @@ export default function Home() {
                       dataKey="value"
                       label
                     >
-                      {(activeTab === "cases" ? chartData : rightsChartData).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
+                      {(activeTab === "cases" ? chartData : rightsChartData).map(
+                        (entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        )
+                      )}
                     </Pie>
                     <Tooltip />
                     <Legend />
@@ -967,7 +1183,9 @@ export default function Home() {
               </div>
 
               <div style={{ ...cardStyle, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>지번 검색</div>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
+                  지번 검색
+                </div>
                 <input
                   style={inputStyle}
                   placeholder="지번 입력"
@@ -977,13 +1195,19 @@ export default function Home() {
 
                 <div style={{ marginTop: 16, maxHeight: 500, overflowY: "auto" }}>
                   {filteredLands.length === 0 ? (
-                    <div style={{ color: "#64748b", fontSize: 14 }}>검색 결과가 없습니다.</div>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>
+                      검색 결과가 없습니다.
+                    </div>
                   ) : (
                     filteredLands.map((land) => {
                       const caseCount = grouped[land]?.length || 0;
                       const rightCount = groupedRights[land]?.length || 0;
-                      const hasProgressCase = (grouped[land] || []).some((c) => c.status !== "종결");
-                      const hasActiveRight = (groupedRights[land] || []).some((r) => r.status !== "말소");
+                      const hasProgressCase = (grouped[land] || []).some(
+                        (c) => c.status !== "종결"
+                      );
+                      const hasActiveRight = (groupedRights[land] || []).some(
+                        (r) => r.status !== "말소"
+                      );
 
                       return (
                         <div
@@ -994,18 +1218,40 @@ export default function Home() {
                             borderRadius: 14,
                             marginBottom: 10,
                             cursor: "pointer",
-                            background: selectedLand === land ? "#e0e7ff" : "#f8fafc",
-                            border: selectedLand === land ? "1px solid #818cf8" : "1px solid #e5e7eb",
+                            background:
+                              selectedLand === land ? "#e0e7ff" : "#f8fafc",
+                            border:
+                              selectedLand === land
+                                ? "1px solid #818cf8"
+                                : "1px solid #e5e7eb",
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 8,
+                            }}
+                          >
                             <div>
                               <div style={{ fontWeight: 700 }}>{land}</div>
-                              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#64748b",
+                                  marginTop: 4,
+                                }}
+                              >
                                 소송 {caseCount}건 / 권리 {rightCount}건
                               </div>
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6,
+                              }}
+                            >
                               <div
                                 style={{
                                   padding: "6px 10px",
@@ -1013,7 +1259,9 @@ export default function Home() {
                                   fontSize: 12,
                                   fontWeight: 700,
                                   color: "#fff",
-                                  background: hasProgressCase ? "#ef4444" : "#10b981",
+                                  background: hasProgressCase
+                                    ? "#ef4444"
+                                    : "#10b981",
                                   textAlign: "center",
                                 }}
                               >
@@ -1026,7 +1274,9 @@ export default function Home() {
                                   fontSize: 12,
                                   fontWeight: 700,
                                   color: "#fff",
-                                  background: hasActiveRight ? "#2563eb" : "#94a3b8",
+                                  background: hasActiveRight
+                                    ? "#2563eb"
+                                    : "#94a3b8",
                                   textAlign: "center",
                                 }}
                               >
@@ -1042,11 +1292,15 @@ export default function Home() {
               </div>
 
               <div style={{ ...cardStyle, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>엑셀 업로드</div>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
+                  엑셀 업로드
+                </div>
 
                 <div style={{ display: "grid", gap: 12 }}>
                   <div>
-                    <div style={{ ...labelStyle, marginBottom: 8 }}>소송 엑셀</div>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>
+                      소송 엑셀
+                    </div>
                     <input
                       type="file"
                       accept=".xlsx,.xls"
@@ -1062,7 +1316,9 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <div style={{ ...labelStyle, marginBottom: 8 }}>권리관계 엑셀</div>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>
+                      권리관계 엑셀
+                    </div>
                     <input
                       type="file"
                       accept=".xlsx,.xls"
@@ -1094,9 +1350,16 @@ export default function Home() {
                     지번: <b>{selectedLand}</b>
                   </div>
                   <div style={{ display: "grid", gap: 10 }}>
-                    <div>소송 수: <b>{selectedLandCases.length}</b>건</div>
-                    <div>권리 수: <b>{selectedLandRightsFiltered.length}</b>건</div>
-                    <div>권리 총액: <b>{selectedLandRightsTotalAmount.toLocaleString()}</b>원</div>
+                    <div>
+                      소송 수: <b>{selectedLandCases.length}</b>건
+                    </div>
+                    <div>
+                      권리 수: <b>{selectedLandRightsFiltered.length}</b>건
+                    </div>
+                    <div>
+                      권리 총액:{" "}
+                      <b>{selectedLandRightsTotalAmount.toLocaleString()}</b>원
+                    </div>
                   </div>
                 </div>
               )}
@@ -1157,7 +1420,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="사건번호"
                           value={form.case_number}
-                          onChange={(e) => setForm({ ...form, case_number: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, case_number: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1167,7 +1432,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="소가액"
                           value={form.claim_amount}
-                          onChange={(e) => setForm({ ...form, claim_amount: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, claim_amount: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1187,7 +1454,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="담당자"
                           value={form.assignee}
-                          onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, assignee: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1197,7 +1466,9 @@ export default function Home() {
                           style={inputStyle}
                           type="date"
                           value={form.next_date}
-                          onChange={(e) => setForm({ ...form, next_date: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, next_date: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1224,7 +1495,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="판결결과"
                           value={form.judgment_result}
-                          onChange={(e) => setForm({ ...form, judgment_result: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, judgment_result: e.target.value })
+                          }
                         />
                       </div>
                     </div>
@@ -1371,7 +1644,9 @@ export default function Home() {
                                   {c.next_date || "-"}
                                 </td>
                                 <td style={tdStyle}>{c.judgment_result || "-"}</td>
-                                <td style={{ ...tdStyle, minWidth: 180 }}>{c.memo || "-"}</td>
+                                <td style={{ ...tdStyle, minWidth: 180 }}>
+                                  {c.memo || "-"}
+                                </td>
                                 <td style={tdStyle}>
                                   {c.file_url ? (
                                     <a href={c.file_url} target="_blank" rel="noreferrer">
@@ -1384,21 +1659,35 @@ export default function Home() {
                                 <td style={tdStyle}>
                                   <input
                                     type="file"
-                                    onChange={(e) => handleFileUpload(c.id, e.target.files[0])}
+                                    onChange={(e) =>
+                                      handleFileUpload(c.id, e.target.files[0])
+                                    }
                                   />
                                   {uploadingId === c.id && (
-                                    <div style={{ color: "#f59e0b", marginTop: 6, fontSize: 12 }}>
+                                    <div
+                                      style={{
+                                        color: "#f59e0b",
+                                        marginTop: 6,
+                                        fontSize: 12,
+                                      }}
+                                    >
                                       업로드 중...
                                     </div>
                                   )}
                                 </td>
                                 <td style={tdStyle}>
-                                  <button style={buttonEdit} onClick={() => startEditCase(c)}>
+                                  <button
+                                    style={buttonEdit}
+                                    onClick={() => startEditCase(c)}
+                                  >
                                     수정
                                   </button>
                                 </td>
                                 <td style={tdStyle}>
-                                  <button style={buttonDanger} onClick={() => deleteCase(c.id)}>
+                                  <button
+                                    style={buttonDanger}
+                                    onClick={() => deleteCase(c.id)}
+                                  >
                                     삭제
                                   </button>
                                 </td>
@@ -1446,7 +1735,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="지번"
                           value={rightForm.land}
-                          onChange={(e) => setRightForm({ ...rightForm, land: e.target.value })}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, land: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1457,7 +1748,10 @@ export default function Home() {
                           placeholder="권리자"
                           value={rightForm.right_holder}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, right_holder: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              right_holder: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1469,7 +1763,10 @@ export default function Home() {
                           placeholder="권리종류"
                           value={rightForm.right_type}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, right_type: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              right_type: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1481,7 +1778,10 @@ export default function Home() {
                           placeholder="순위"
                           value={rightForm.rank_order}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, rank_order: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              rank_order: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1492,7 +1792,9 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="금액"
                           value={rightForm.amount}
-                          onChange={(e) => setRightForm({ ...rightForm, amount: e.target.value })}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, amount: e.target.value })
+                          }
                         />
                       </div>
 
@@ -1501,7 +1803,9 @@ export default function Home() {
                         <select
                           style={inputStyle}
                           value={rightForm.status}
-                          onChange={(e) => setRightForm({ ...rightForm, status: e.target.value })}
+                          onChange={(e) =>
+                            setRightForm({ ...rightForm, status: e.target.value })
+                          }
                         >
                           <option value="유효">유효</option>
                           <option value="말소">말소</option>
@@ -1517,7 +1821,10 @@ export default function Home() {
                           type="date"
                           value={rightForm.registration_date}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, registration_date: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              registration_date: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1529,7 +1836,10 @@ export default function Home() {
                           type="date"
                           value={rightForm.cancellation_date}
                           onChange={(e) =>
-                            setRightForm({ ...rightForm, cancellation_date: e.target.value })
+                            setRightForm({
+                              ...rightForm,
+                              cancellation_date: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -1541,7 +1851,9 @@ export default function Home() {
                         style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
                         placeholder="메모"
                         value={rightForm.memo}
-                        onChange={(e) => setRightForm({ ...rightForm, memo: e.target.value })}
+                        onChange={(e) =>
+                          setRightForm({ ...rightForm, memo: e.target.value })
+                        }
                       />
                     </div>
 
@@ -1776,14 +2088,22 @@ export default function Home() {
                                 >
                                   {r.status || "-"}
                                 </td>
-                                <td style={{ ...tdStyle, minWidth: 180 }}>{r.memo || "-"}</td>
+                                <td style={{ ...tdStyle, minWidth: 180 }}>
+                                  {r.memo || "-"}
+                                </td>
                                 <td style={tdStyle}>
-                                  <button style={buttonEdit} onClick={() => startEditRight(r)}>
+                                  <button
+                                    style={buttonEdit}
+                                    onClick={() => startEditRight(r)}
+                                  >
                                     수정
                                   </button>
                                 </td>
                                 <td style={tdStyle}>
-                                  <button style={buttonDanger} onClick={() => deleteRight(r.id)}>
+                                  <button
+                                    style={buttonDanger}
+                                    onClick={() => deleteRight(r.id)}
+                                  >
                                     삭제
                                   </button>
                                 </td>
