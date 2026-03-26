@@ -23,14 +23,18 @@ export default function Home() {
   const [selectedLand, setSelectedLand] = useState("");
   const [search, setSearch] = useState("");
   const [uploadingId, setUploadingId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     land: "",
     type: "",
     status: "",
     next_date: "",
     file_url: "",
-  });
+    assignee: "",
+  };
+
+  const [form, setForm] = useState(emptyForm);
 
   const login = () => {
     if (id === "adminlocus" && pw === "Locus123!@#") {
@@ -55,26 +59,109 @@ export default function Home() {
     setCases(data || []);
   };
 
+  const resetForm = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+  };
+
   const addCase = async () => {
     if (!form.land || !form.type || !form.status) {
       alert("지번, 소송종류, 진행상황은 입력해주세요.");
       return;
     }
 
-    const { error } = await supabase.from("cases").insert([form]);
+    const insertPayload = {
+      land: form.land,
+      type: form.type,
+      status: form.status,
+      next_date: form.next_date || null,
+      file_url: form.file_url || null,
+      assignee: form.assignee || null,
+    };
+
+    const { error } = await supabase.from("cases").insert([insertPayload]);
 
     if (error) {
       alert(error.message);
     } else {
-      setForm({
-        land: "",
-        type: "",
-        status: "",
-        next_date: "",
-        file_url: "",
-      });
+      resetForm();
       fetchCases();
     }
+  };
+
+  const updateCase = async () => {
+    if (!editingId) return;
+
+    if (!form.land || !form.type || !form.status) {
+      alert("지번, 소송종류, 진행상황은 입력해주세요.");
+      return;
+    }
+
+    const updatePayload = {
+      land: form.land,
+      type: form.type,
+      status: form.status,
+      next_date: form.next_date || null,
+      file_url: form.file_url || null,
+      assignee: form.assignee || null,
+    };
+
+    const { error } = await supabase
+      .from("cases")
+      .update(updatePayload)
+      .eq("id", editingId);
+
+    if (error) {
+      alert("수정 실패: " + error.message);
+    } else {
+      resetForm();
+      fetchCases();
+      alert("수정 완료");
+    }
+  };
+
+  const deleteCase = async (caseId) => {
+    const ok = confirm("이 소송건을 삭제할까요?");
+    if (!ok) return;
+
+    const targetCase = cases.find((c) => c.id === caseId);
+
+    if (targetCase?.file_url) {
+      try {
+        const parts = targetCase.file_url.split("/case-files/");
+        if (parts[1]) {
+          await supabase.storage.from("case-files").remove([parts[1]]);
+        }
+      } catch (e) {
+        // 파일 삭제 실패해도 DB 삭제는 진행
+      }
+    }
+
+    const { error } = await supabase.from("cases").delete().eq("id", caseId);
+
+    if (error) {
+      alert("삭제 실패: " + error.message);
+    } else {
+      if (editingId === caseId) {
+        resetForm();
+      }
+      fetchCases();
+      alert("삭제 완료");
+    }
+  };
+
+  const startEditCase = (caseItem) => {
+    setEditingId(caseItem.id);
+    setForm({
+      land: caseItem.land || "",
+      type: caseItem.type || "",
+      status: caseItem.status || "",
+      next_date: caseItem.next_date || "",
+      file_url: caseItem.file_url || "",
+      assignee: caseItem.assignee || "",
+    });
+    setSelectedLand(caseItem.land || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleFileUpload = async (caseId, file) => {
@@ -210,7 +297,9 @@ export default function Home() {
         style={{ marginBottom: 10, display: "block" }}
       />
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, border: "1px solid #ccc", padding: 15 }}>
+        <h3>{editingId ? "소송 수정" : "소송 등록"}</h3>
+
         <input
           placeholder="지번"
           value={form.land}
@@ -220,6 +309,11 @@ export default function Home() {
           placeholder="소송종류"
           value={form.type}
           onChange={(e) => setForm({ ...form, type: e.target.value })}
+        />
+        <input
+          placeholder="담당자"
+          value={form.assignee}
+          onChange={(e) => setForm({ ...form, assignee: e.target.value })}
         />
         <input
           type="date"
@@ -238,7 +332,17 @@ export default function Home() {
           <option value="항소">항소</option>
           <option value="종결">종결</option>
         </select>
-        <button onClick={addCase}>추가</button>
+
+        {!editingId ? (
+          <button onClick={addCase}>추가</button>
+        ) : (
+          <>
+            <button onClick={updateCase}>수정 저장</button>
+            <button onClick={resetForm} style={{ marginLeft: 8 }}>
+              취소
+            </button>
+          </>
+        )}
       </div>
 
       <hr />
@@ -271,16 +375,20 @@ export default function Home() {
             <thead>
               <tr>
                 <th>소송종류</th>
+                <th>담당자</th>
                 <th>진행상황</th>
                 <th>다음기일</th>
                 <th>첨부파일</th>
                 <th>업로드</th>
+                <th>수정</th>
+                <th>삭제</th>
               </tr>
             </thead>
             <tbody>
-              {grouped[selectedLand].map((c, i) => (
-                <tr key={i}>
+              {grouped[selectedLand].map((c) => (
+                <tr key={c.id}>
                   <td>{c.type}</td>
+                  <td>{c.assignee || "-"}</td>
                   <td
                     style={{
                       color:
@@ -324,6 +432,12 @@ export default function Home() {
                         업로드 중...
                       </div>
                     )}
+                  </td>
+                  <td>
+                    <button onClick={() => startEditCase(c)}>수정</button>
+                  </td>
+                  <td>
+                    <button onClick={() => deleteCase(c.id)}>삭제</button>
                   </td>
                 </tr>
               ))}
