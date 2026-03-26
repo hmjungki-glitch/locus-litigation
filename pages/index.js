@@ -18,6 +18,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const adminId = process.env.NEXT_PUBLIC_ADMIN_ID;
 const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
+const viewerId = process.env.NEXT_PUBLIC_VIEWER_ID;
+const viewerPassword = process.env.NEXT_PUBLIC_VIEWER_PASSWORD;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
@@ -36,10 +38,12 @@ const RIGHT_TYPE_OPTIONS = [
   "압류",
   "기타",
 ];
+
 const RIGHT_STATUS_OPTIONS = ["전체", "유효", "말소", "변경", "검토필요"];
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [loginRole, setLoginRole] = useState("");
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [rememberId, setRememberId] = useState(false);
@@ -48,6 +52,7 @@ export default function Home() {
 
   const [cases, setCases] = useState([]);
   const [rights, setRights] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
 
   const [selectedLand, setSelectedLand] = useState("");
   const [search, setSearch] = useState("");
@@ -90,26 +95,34 @@ export default function Home() {
   const [form, setForm] = useState(emptyForm);
   const [rightForm, setRightForm] = useState(emptyRightForm);
 
+  const isAdmin = loginRole === "admin";
+  const isViewer = loginRole === "viewer";
+
   useEffect(() => {
     const savedId = localStorage.getItem("savedLoginId");
     const savedLoginState = localStorage.getItem("locusLoggedIn");
+    const savedRole = localStorage.getItem("locusLoginRole");
 
     if (savedId) {
       setId(savedId);
       setRememberId(true);
     }
 
-    if (savedLoginState === "true") {
+    if (savedLoginState === "true" && savedRole) {
       setLoggedIn(true);
+      setLoginRole(savedRole);
     }
   }, []);
 
   useEffect(() => {
     if (loggedIn) {
-      fetchCases();
-      fetchRights();
+      fetchAll();
     }
   }, [loggedIn]);
+
+  const fetchAll = async () => {
+    await Promise.all([fetchCases(), fetchRights(), fetchAuditLogs()]);
+  };
 
   const login = async () => {
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -122,7 +135,18 @@ export default function Home() {
       return;
     }
 
-    if (id !== adminId || pw !== adminPassword) {
+    let role = "";
+
+    if (id === adminId && pw === adminPassword) {
+      role = "admin";
+    } else if (
+      viewerId &&
+      viewerPassword &&
+      id === viewerId &&
+      pw === viewerPassword
+    ) {
+      role = "viewer";
+    } else {
       alert("로그인 실패");
       return;
     }
@@ -134,14 +158,18 @@ export default function Home() {
     }
 
     localStorage.setItem("locusLoggedIn", "true");
+    localStorage.setItem("locusLoginRole", role);
+
+    setLoginRole(role);
     setLoggedIn(true);
-    await fetchCases();
-    await fetchRights();
+    await fetchAll();
   };
 
   const logout = () => {
     localStorage.removeItem("locusLoggedIn");
+    localStorage.removeItem("locusLoginRole");
     setLoggedIn(false);
+    setLoginRole("");
     setPw("");
   };
 
@@ -149,7 +177,8 @@ export default function Home() {
     const { data, error } = await supabase
       .from("cases")
       .select("*")
-      .order("id", { ascending: true });
+      .eq("is_deleted", false)
+      .order("updated_at", { ascending: false });
 
     if (error) {
       alert("cases 조회 실패: " + error.message);
@@ -163,7 +192,8 @@ export default function Home() {
     const { data, error } = await supabase
       .from("rights")
       .select("*")
-      .order("id", { ascending: true });
+      .eq("is_deleted", false)
+      .order("updated_at", { ascending: false });
 
     if (error) {
       alert("rights 조회 실패: " + error.message);
@@ -171,6 +201,50 @@ export default function Home() {
     }
 
     setRights(data || []);
+  };
+
+  const fetchAuditLogs = async () => {
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (error) {
+      console.error("audit_logs 조회 실패:", error.message);
+      return;
+    }
+
+    setAuditLogs(data || []);
+  };
+
+  const addAuditLog = async ({
+    action,
+    targetTable,
+    targetId,
+    land,
+    reason = null,
+    oldData = null,
+    newData = null,
+  }) => {
+    try {
+      await supabase.from("audit_logs").insert([
+        {
+          actor_id: id,
+          actor_role: loginRole,
+          action,
+          target_table: targetTable,
+          target_id: targetId ? String(targetId) : null,
+          land: land || null,
+          reason,
+          old_data: oldData,
+          new_data: newData,
+        },
+      ]);
+      fetchAuditLogs();
+    } catch (e) {
+      console.error("audit log insert error", e);
+    }
   };
 
   const resetForm = () => {
@@ -197,9 +271,40 @@ export default function Home() {
     return Number(onlyNum);
   };
 
+  const hasDuplicateCase = () => {
+    if (!form.land || !form.case_number) return false;
+
+    return cases.some(
+      (item) =>
+        item.id !== editingId &&
+        (item.land || "").trim() === form.land.trim() &&
+        (item.case_number || "").trim() === form.case_number.trim()
+    );
+  };
+
+  const hasDuplicateRight = () => {
+    if (!rightForm.land || !rightForm.right_type) return false;
+
+    return rights.some(
+      (item) =>
+        item.id !== editingRightId &&
+        (item.land || "").trim() === rightForm.land.trim() &&
+        (item.right_holder || "").trim() === rightForm.right_holder.trim() &&
+        (item.right_type || "").trim() === rightForm.right_type.trim() &&
+        String(item.rank_order || "") === String(parseNumber(rightForm.rank_order) || "")
+    );
+  };
+
   const addCase = async () => {
+    if (!isAdmin) return;
+
     if (!form.land || !form.type || !form.status) {
       alert("지번, 소송종류, 진행상황은 입력해주세요.");
+      return;
+    }
+
+    if (hasDuplicateCase()) {
+      alert("같은 지번 + 사건번호 조합의 소송이 이미 있습니다.");
       return;
     }
 
@@ -217,23 +322,38 @@ export default function Home() {
       file_url: form.file_url || null,
     };
 
-    const { error } = await supabase.from("cases").insert([payload]);
+    const { data, error } = await supabase.from("cases").insert([payload]).select();
 
     if (error) {
       alert(error.message);
     } else {
+      const inserted = data?.[0];
+      await addAuditLog({
+        action: "CREATE",
+        targetTable: "cases",
+        targetId: inserted?.id,
+        land: inserted?.land,
+        newData: inserted,
+      });
       resetForm();
       fetchCases();
     }
   };
 
   const updateCase = async () => {
-    if (!editingId) return;
+    if (!isAdmin || !editingId) return;
 
     if (!form.land || !form.type || !form.status) {
       alert("지번, 소송종류, 진행상황은 입력해주세요.");
       return;
     }
+
+    if (hasDuplicateCase()) {
+      alert("같은 지번 + 사건번호 조합의 소송이 이미 있습니다.");
+      return;
+    }
+
+    const oldCase = cases.find((item) => item.id === editingId);
 
     const payload = {
       land: form.land,
@@ -249,14 +369,24 @@ export default function Home() {
       file_url: form.file_url || null,
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("cases")
       .update(payload)
-      .eq("id", editingId);
+      .eq("id", editingId)
+      .select();
 
     if (error) {
       alert("수정 실패: " + error.message);
     } else {
+      const updated = data?.[0];
+      await addAuditLog({
+        action: "UPDATE",
+        targetTable: "cases",
+        targetId: updated?.id,
+        land: updated?.land,
+        oldData: oldCase,
+        newData: updated,
+      });
       resetForm();
       fetchCases();
       alert("수정 완료");
@@ -264,25 +394,42 @@ export default function Home() {
   };
 
   const deleteCase = async (caseId) => {
+    if (!isAdmin) return;
+
     const ok = confirm("이 소송건을 삭제할까요?");
     if (!ok) return;
 
-    const targetCase = cases.find((c) => c.id === caseId);
-
-    if (targetCase?.file_url) {
-      try {
-        const parts = targetCase.file_url.split("/case-files/");
-        if (parts[1]) {
-          await supabase.storage.from("case-files").remove([parts[1]]);
-        }
-      } catch (e) {}
+    const reason = prompt("삭제 사유를 입력해주세요.");
+    if (!reason || !reason.trim()) {
+      alert("삭제 사유를 입력해야 합니다.");
+      return;
     }
 
-    const { error } = await supabase.from("cases").delete().eq("id", caseId);
+    const targetCase = cases.find((c) => c.id === caseId);
+
+    const { data, error } = await supabase
+      .from("cases")
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_by: id,
+        delete_reason: reason.trim(),
+      })
+      .eq("id", caseId)
+      .select();
 
     if (error) {
       alert("삭제 실패: " + error.message);
     } else {
+      await addAuditLog({
+        action: "DELETE",
+        targetTable: "cases",
+        targetId: caseId,
+        land: targetCase?.land,
+        reason: reason.trim(),
+        oldData: targetCase,
+        newData: data?.[0],
+      });
       if (editingId === caseId) resetForm();
       fetchCases();
       alert("삭제 완료");
@@ -312,10 +459,12 @@ export default function Home() {
   };
 
   const handleFileUpload = async (caseId, file) => {
-    if (!file) return;
+    if (!isAdmin || !file) return;
 
     try {
       setUploadingId(caseId);
+
+      const targetCase = cases.find((c) => c.id === caseId);
 
       const fileExt = file.name.split(".").pop();
       const filePath = `case-${caseId}-${Date.now()}.${fileExt}`;
@@ -335,15 +484,25 @@ export default function Home() {
 
       const publicUrl = publicUrlData.publicUrl;
 
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from("cases")
         .update({ file_url: publicUrl })
-        .eq("id", caseId);
+        .eq("id", caseId)
+        .select();
 
       if (updateError) {
         alert("파일 주소 저장 실패: " + updateError.message);
         return;
       }
+
+      await addAuditLog({
+        action: "UPLOAD_FILE",
+        targetTable: "cases",
+        targetId: caseId,
+        land: targetCase?.land,
+        oldData: targetCase,
+        newData: data?.[0],
+      });
 
       await fetchCases();
       alert("파일 업로드 완료");
@@ -355,8 +514,15 @@ export default function Home() {
   };
 
   const addRight = async () => {
+    if (!isAdmin) return;
+
     if (!rightForm.land || !rightForm.right_type || !rightForm.status) {
       alert("지번, 권리종류, 상태는 입력해주세요.");
+      return;
+    }
+
+    if (hasDuplicateRight()) {
+      alert("같은 지번 + 권리자 + 권리종류 + 순위 조합의 권리관계가 이미 있습니다.");
       return;
     }
 
@@ -372,11 +538,19 @@ export default function Home() {
       memo: rightForm.memo || null,
     };
 
-    const { error } = await supabase.from("rights").insert([payload]);
+    const { data, error } = await supabase.from("rights").insert([payload]).select();
 
     if (error) {
       alert("권리관계 등록 실패: " + error.message);
     } else {
+      const inserted = data?.[0];
+      await addAuditLog({
+        action: "CREATE",
+        targetTable: "rights",
+        targetId: inserted?.id,
+        land: inserted?.land,
+        newData: inserted,
+      });
       resetRightForm();
       fetchRights();
       alert("권리관계 등록 완료");
@@ -384,12 +558,19 @@ export default function Home() {
   };
 
   const updateRight = async () => {
-    if (!editingRightId) return;
+    if (!isAdmin || !editingRightId) return;
 
     if (!rightForm.land || !rightForm.right_type || !rightForm.status) {
       alert("지번, 권리종류, 상태는 입력해주세요.");
       return;
     }
+
+    if (hasDuplicateRight()) {
+      alert("같은 지번 + 권리자 + 권리종류 + 순위 조합의 권리관계가 이미 있습니다.");
+      return;
+    }
+
+    const oldRight = rights.find((item) => item.id === editingRightId);
 
     const payload = {
       land: rightForm.land,
@@ -403,14 +584,24 @@ export default function Home() {
       memo: rightForm.memo || null,
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("rights")
       .update(payload)
-      .eq("id", editingRightId);
+      .eq("id", editingRightId)
+      .select();
 
     if (error) {
       alert("권리관계 수정 실패: " + error.message);
     } else {
+      const updated = data?.[0];
+      await addAuditLog({
+        action: "UPDATE",
+        targetTable: "rights",
+        targetId: updated?.id,
+        land: updated?.land,
+        oldData: oldRight,
+        newData: updated,
+      });
       resetRightForm();
       fetchRights();
       alert("권리관계 수정 완료");
@@ -418,14 +609,42 @@ export default function Home() {
   };
 
   const deleteRight = async (rightId) => {
+    if (!isAdmin) return;
+
     const ok = confirm("이 권리관계를 삭제할까요?");
     if (!ok) return;
 
-    const { error } = await supabase.from("rights").delete().eq("id", rightId);
+    const reason = prompt("삭제 사유를 입력해주세요.");
+    if (!reason || !reason.trim()) {
+      alert("삭제 사유를 입력해야 합니다.");
+      return;
+    }
+
+    const targetRight = rights.find((r) => r.id === rightId);
+
+    const { data, error } = await supabase
+      .from("rights")
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_by: id,
+        delete_reason: reason.trim(),
+      })
+      .eq("id", rightId)
+      .select();
 
     if (error) {
       alert("권리관계 삭제 실패: " + error.message);
     } else {
+      await addAuditLog({
+        action: "DELETE",
+        targetTable: "rights",
+        targetId: rightId,
+        land: targetRight?.land,
+        reason: reason.trim(),
+        oldData: targetRight,
+        newData: data?.[0],
+      });
       if (editingRightId === rightId) resetRightForm();
       fetchRights();
       alert("권리관계 삭제 완료");
@@ -500,7 +719,7 @@ export default function Home() {
   };
 
   const handleExcelUpload = async (type, file) => {
-    if (!file) return;
+    if (!isAdmin || !file) return;
 
     try {
       setExcelUploading(true);
@@ -553,6 +772,13 @@ export default function Home() {
           return;
         }
 
+        await addAuditLog({
+          action: "EXCEL_UPLOAD",
+          targetTable: "cases",
+          reason: `소송 ${payload.length}건 업로드`,
+          newData: payload,
+        });
+
         await fetchCases();
         alert(`소송 ${payload.length}건 업로드 완료`);
       }
@@ -597,6 +823,13 @@ export default function Home() {
           alert("권리관계 엑셀 업로드 실패: " + error.message);
           return;
         }
+
+        await addAuditLog({
+          action: "EXCEL_UPLOAD",
+          targetTable: "rights",
+          reason: `권리관계 ${payload.length}건 업로드`,
+          newData: payload,
+        });
 
         await fetchRights();
         alert(`권리관계 ${payload.length}건 업로드 완료`);
@@ -806,6 +1039,23 @@ export default function Home() {
     cursor: "pointer",
   });
 
+  const viewerNotice = isViewer ? (
+    <div
+      style={{
+        marginBottom: 16,
+        padding: "14px 16px",
+        borderRadius: 14,
+        background: "#fff7ed",
+        border: "1px solid #fdba74",
+        color: "#9a3412",
+        fontSize: 14,
+        fontWeight: 700,
+      }}
+    >
+      조회전용 계정입니다. 등록 / 수정 / 삭제 / 업로드는 관리자만 가능합니다.
+    </div>
+  ) : null;
+
   if (!loggedIn) {
     return (
       <div
@@ -845,7 +1095,7 @@ export default function Home() {
               동작구 본동 개발사업 소송관리
             </h2>
             <p style={{ marginTop: 10, color: "#64748b", fontSize: 14 }}>
-              공용 계정으로 접속하여 사업장 소송 현황을 관리하세요.
+              관리자 또는 조회전용 계정으로 로그인하세요.
             </p>
           </div>
 
@@ -957,11 +1207,22 @@ export default function Home() {
                   color: "rgba(255,255,255,0.82)",
                 }}
               >
-                소송, 권리관계, 기일, 첨부파일, 엑셀 업로드를 한 화면에서 관리하는 내부 시스템
+                역할분리, 이력관리, 소프트삭제, 중복방지를 포함한 운영 버전
               </p>
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontWeight: 800,
+                }}
+              >
+                {isAdmin ? "관리자" : "조회전용"}
+              </div>
               <button
                 style={tabButton(activeTab === "cases")}
                 onClick={() => setActiveTab("cases")}
@@ -986,6 +1247,8 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {viewerNotice}
 
         <div
           style={{
@@ -1058,17 +1321,10 @@ export default function Home() {
           </div>
           <div style={{ ...cardStyle, padding: 20 }}>
             <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
-              유효 권리
+              최근 이력
             </div>
-            <div
-              style={{
-                fontSize: 32,
-                fontWeight: 800,
-                marginTop: 8,
-                color: "#2563eb",
-              }}
-            >
-              {activeRights}
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 8 }}>
+              {auditLogs.length}
             </div>
           </div>
         </div>
@@ -1158,17 +1414,40 @@ export default function Home() {
 
               <div style={{ ...cardStyle, padding: 24, overflowX: "auto" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
-                  지번별 소송/권리 건수
+                  최근 변경 이력
                 </div>
-                <BarChart width={520} height={300} data={landSummaryData.slice(0, 10)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cases" fill="#2563eb" name="소송" />
-                  <Bar dataKey="rights" fill="#10b981" name="권리" />
-                </BarChart>
+                <div style={{ maxHeight: 300, overflowY: "auto", display: "grid", gap: 10 }}>
+                  {auditLogs.length === 0 ? (
+                    <div style={{ color: "#64748b" }}>이력이 없습니다.</div>
+                  ) : (
+                    auditLogs.slice(0, 10).map((log) => (
+                      <div
+                        key={log.id}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          border: "1px solid #e5e7eb",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <div style={{ fontWeight: 800 }}>
+                          [{log.target_table}] {log.action}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                          {log.actor_id} / {log.actor_role} / {log.land || "-"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                          {log.created_at}
+                        </div>
+                        {log.reason && (
+                          <div style={{ fontSize: 13, color: "#b45309", marginTop: 4 }}>
+                            사유: {log.reason}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1346,6 +1625,7 @@ export default function Home() {
                     <input
                       type="file"
                       accept=".xlsx,.xls"
+                      disabled={!isAdmin}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         handleExcelUpload("cases", file);
@@ -1364,6 +1644,7 @@ export default function Home() {
                     <input
                       type="file"
                       accept=".xlsx,.xls"
+                      disabled={!isAdmin}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         handleExcelUpload("rights", file);
@@ -1442,6 +1723,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="지번"
                           value={form.land}
+                          disabled={!isAdmin}
                           onChange={(e) => setForm({ ...form, land: e.target.value })}
                         />
                       </div>
@@ -1452,6 +1734,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="소송종류"
                           value={form.type}
+                          disabled={!isAdmin}
                           onChange={(e) => setForm({ ...form, type: e.target.value })}
                         />
                       </div>
@@ -1462,6 +1745,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="사건번호"
                           value={form.case_number}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setForm({ ...form, case_number: e.target.value })
                           }
@@ -1474,6 +1758,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="소가액"
                           value={form.claim_amount}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setForm({
                               ...form,
@@ -1489,6 +1774,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="법원"
                           value={form.court}
+                          disabled={!isAdmin}
                           onChange={(e) => setForm({ ...form, court: e.target.value })}
                         />
                       </div>
@@ -1499,6 +1785,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="담당자"
                           value={form.assignee}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setForm({ ...form, assignee: e.target.value })
                           }
@@ -1511,6 +1798,7 @@ export default function Home() {
                           style={inputStyle}
                           type="date"
                           value={form.next_date}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setForm({ ...form, next_date: e.target.value })
                           }
@@ -1522,6 +1810,7 @@ export default function Home() {
                         <select
                           style={inputStyle}
                           value={form.status}
+                          disabled={!isAdmin}
                           onChange={(e) => setForm({ ...form, status: e.target.value })}
                         >
                           <option value="">진행상황 선택</option>
@@ -1540,6 +1829,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="판결결과"
                           value={form.judgment_result}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setForm({ ...form, judgment_result: e.target.value })
                           }
@@ -1553,26 +1843,29 @@ export default function Home() {
                         style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
                         placeholder="메모"
                         value={form.memo}
+                        disabled={!isAdmin}
                         onChange={(e) => setForm({ ...form, memo: e.target.value })}
                       />
                     </div>
 
-                    <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
-                      {!editingId ? (
-                        <button style={buttonPrimary} onClick={addCase}>
-                          소송 추가
-                        </button>
-                      ) : (
-                        <>
-                          <button style={buttonPrimary} onClick={updateCase}>
-                            수정 저장
+                    {isAdmin && (
+                      <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
+                        {!editingId ? (
+                          <button style={buttonPrimary} onClick={addCase}>
+                            소송 추가
                           </button>
-                          <button style={buttonSecondary} onClick={resetForm}>
-                            취소
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        ) : (
+                          <>
+                            <button style={buttonPrimary} onClick={updateCase}>
+                              수정 저장
+                            </button>
+                            <button style={buttonSecondary} onClick={resetForm}>
+                              취소
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ ...cardStyle, padding: 24 }}>
@@ -1710,6 +2003,7 @@ export default function Home() {
                                 <td style={tdStyle}>
                                   <input
                                     type="file"
+                                    disabled={!isAdmin}
                                     onChange={(e) =>
                                       handleFileUpload(c.id, e.target.files[0])
                                     }
@@ -1727,20 +2021,28 @@ export default function Home() {
                                   )}
                                 </td>
                                 <td style={tdStyle}>
-                                  <button
-                                    style={buttonEdit}
-                                    onClick={() => startEditCase(c)}
-                                  >
-                                    수정
-                                  </button>
+                                  {isAdmin ? (
+                                    <button
+                                      style={buttonEdit}
+                                      onClick={() => startEditCase(c)}
+                                    >
+                                      수정
+                                    </button>
+                                  ) : (
+                                    "-"
+                                  )}
                                 </td>
                                 <td style={tdStyle}>
-                                  <button
-                                    style={buttonDanger}
-                                    onClick={() => deleteCase(c.id)}
-                                  >
-                                    삭제
-                                  </button>
+                                  {isAdmin ? (
+                                    <button
+                                      style={buttonDanger}
+                                      onClick={() => deleteCase(c.id)}
+                                    >
+                                      삭제
+                                    </button>
+                                  ) : (
+                                    "-"
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -1786,6 +2088,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="지번"
                           value={rightForm.land}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({ ...rightForm, land: e.target.value })
                           }
@@ -1798,6 +2101,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="권리자"
                           value={rightForm.right_holder}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1813,6 +2117,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="권리종류"
                           value={rightForm.right_type}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1828,6 +2133,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="순위"
                           value={rightForm.rank_order}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1843,6 +2149,7 @@ export default function Home() {
                           style={inputStyle}
                           placeholder="금액"
                           value={rightForm.amount}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1857,6 +2164,7 @@ export default function Home() {
                         <select
                           style={inputStyle}
                           value={rightForm.status}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({ ...rightForm, status: e.target.value })
                           }
@@ -1874,6 +2182,7 @@ export default function Home() {
                           style={inputStyle}
                           type="date"
                           value={rightForm.registration_date}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1889,6 +2198,7 @@ export default function Home() {
                           style={inputStyle}
                           type="date"
                           value={rightForm.cancellation_date}
+                          disabled={!isAdmin}
                           onChange={(e) =>
                             setRightForm({
                               ...rightForm,
@@ -1905,28 +2215,31 @@ export default function Home() {
                         style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
                         placeholder="메모"
                         value={rightForm.memo}
+                        disabled={!isAdmin}
                         onChange={(e) =>
                           setRightForm({ ...rightForm, memo: e.target.value })
                         }
                       />
                     </div>
 
-                    <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
-                      {!editingRightId ? (
-                        <button style={buttonPrimary} onClick={addRight}>
-                          권리관계 추가
-                        </button>
-                      ) : (
-                        <>
-                          <button style={buttonPrimary} onClick={updateRight}>
-                            수정 저장
+                    {isAdmin && (
+                      <div style={{ marginTop: 18, display: "flex", gap: 10 }}>
+                        {!editingRightId ? (
+                          <button style={buttonPrimary} onClick={addRight}>
+                            권리관계 추가
                           </button>
-                          <button style={buttonSecondary} onClick={resetRightForm}>
-                            취소
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        ) : (
+                          <>
+                            <button style={buttonPrimary} onClick={updateRight}>
+                              수정 저장
+                            </button>
+                            <button style={buttonSecondary} onClick={resetRightForm}>
+                              취소
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ ...cardStyle, padding: 24 }}>
@@ -2148,20 +2461,28 @@ export default function Home() {
                                   {r.memo || "-"}
                                 </td>
                                 <td style={tdStyle}>
-                                  <button
-                                    style={buttonEdit}
-                                    onClick={() => startEditRight(r)}
-                                  >
-                                    수정
-                                  </button>
+                                  {isAdmin ? (
+                                    <button
+                                      style={buttonEdit}
+                                      onClick={() => startEditRight(r)}
+                                    >
+                                      수정
+                                    </button>
+                                  ) : (
+                                    "-"
+                                  )}
                                 </td>
                                 <td style={tdStyle}>
-                                  <button
-                                    style={buttonDanger}
-                                    onClick={() => deleteRight(r.id)}
-                                  >
-                                    삭제
-                                  </button>
+                                  {isAdmin ? (
+                                    <button
+                                      style={buttonDanger}
+                                      onClick={() => deleteRight(r.id)}
+                                    >
+                                      삭제
+                                    </button>
+                                  ) : (
+                                    "-"
+                                  )}
                                 </td>
                               </tr>
                             ))}
