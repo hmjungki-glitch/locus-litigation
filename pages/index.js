@@ -22,12 +22,14 @@ export default function Home() {
   const [cases, setCases] = useState([]);
   const [selectedLand, setSelectedLand] = useState("");
   const [search, setSearch] = useState("");
+  const [uploadingId, setUploadingId] = useState(null);
 
   const [form, setForm] = useState({
     land: "",
     type: "",
     status: "",
     next_date: "",
+    file_url: "",
   });
 
   const login = () => {
@@ -69,8 +71,52 @@ export default function Home() {
         type: "",
         status: "",
         next_date: "",
+        file_url: "",
       });
       fetchCases();
+    }
+  };
+
+  const handleFileUpload = async (caseId, file) => {
+    if (!file) return;
+
+    try {
+      setUploadingId(caseId);
+
+      const fileExt = file.name.split(".").pop();
+      const filePath = `case-${caseId}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("case-files")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        alert("파일 업로드 실패: " + uploadError.message);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("case-files")
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from("cases")
+        .update({ file_url: publicUrl })
+        .eq("id", caseId);
+
+      if (updateError) {
+        alert("파일 주소 저장 실패: " + updateError.message);
+        return;
+      }
+
+      await fetchCases();
+      alert("파일 업로드 완료");
+    } catch (err) {
+      alert("오류 발생: " + err.message);
+    } finally {
+      setUploadingId(null);
     }
   };
 
@@ -221,12 +267,14 @@ export default function Home() {
       {selectedLand && (
         <div>
           <h3>{selectedLand} 소송 목록</h3>
-          <table border="1" cellPadding="10" style={{ marginTop: 10 }}>
+          <table border="1" cellPadding="10" style={{ marginTop: 10, width: "100%" }}>
             <thead>
               <tr>
                 <th>소송종류</th>
                 <th>진행상황</th>
                 <th>다음기일</th>
+                <th>첨부파일</th>
+                <th>업로드</th>
               </tr>
             </thead>
             <tbody>
@@ -256,6 +304,26 @@ export default function Home() {
                     }}
                   >
                     {c.next_date || "-"}
+                  </td>
+                  <td>
+                    {c.file_url ? (
+                      <a href={c.file_url} target="_blank" rel="noreferrer">
+                        파일 보기
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="file"
+                      onChange={(e) => handleFileUpload(c.id, e.target.files[0])}
+                    />
+                    {uploadingId === c.id && (
+                      <div style={{ color: "orange", marginTop: 5 }}>
+                        업로드 중...
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
