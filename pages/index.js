@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -76,10 +77,32 @@ export default function Home() {
 const total = cases.length;
 const inProgress = cases.filter(c => c.status !== "종결").length;
 const done = cases.filter(c => c.status === "종결").length;
+const chartData = [
+  { name: "진행중", value: inProgress },
+  { name: "종결", value: done }
+];
+
+const COLORS = ["#0088FE", "#00C49F"];
 
   return (
     <div style={{ padding: 40 }}>
       <h2>지번별 소송 관리</h2>
+    <PieChart width={300} height={300}>
+  <Pie
+    data={chartData}
+    cx="50%"
+    cy="50%"
+    outerRadius={100}
+    dataKey="value"
+    label
+  >
+    {chartData.map((entry, index) => (
+      <Cell key={`cell-${index}`} fill={COLORS[index]} />
+    ))}
+  </Pie>
+  <Tooltip />
+  <Legend />
+</PieChart>
     <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
   <div style={{ border: "1px solid black", padding: 10 }}>
     📊 전체: {total}
