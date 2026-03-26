@@ -170,7 +170,16 @@ const COLORS = ["#0088FE", "#00C49F"];
     {grouped[selectedLand].map((c, i) => (
       <tr key={i}>
         <td>{c.type}</td>
-        <td>{c.status}</td>
+<td style={{
+  color:
+    c.status === "종결"
+      ? "green"
+      : c.status === "진행중"
+      ? "red"
+      : "black"
+}}>
+  {c.status}
+</td>
       </tr>
     ))}
   </tbody>
