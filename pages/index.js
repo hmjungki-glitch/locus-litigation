@@ -23,11 +23,12 @@ export default function Home() {
   const [selectedLand, setSelectedLand] = useState("");
   const [search, setSearch] = useState("");
 
-  const [form, setForm] = useState({
-    land: "",
-    type: "",
-    status: ""
-  });
+const [form, setForm] = useState({
+  land: "",
+  type: "",
+  status: "",
+  next_date: ""
+});
 
   const login = () => {
     if (id === "adminlocus" && pw === "Locus123!@#") {
