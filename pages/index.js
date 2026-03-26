@@ -149,7 +149,19 @@ const COLORS = ["#0088FE", "#00C49F"];
   .map((land) => (
         <div key={land} style={{ cursor: "pointer", marginBottom: 10 }}
           onClick={() => setSelectedLand(land)}>
-          👉 {land} ({grouped[land].length}건)
+<div
+  key={land}
+  style={{
+    cursor: "pointer",
+    marginBottom: 10,
+    color: grouped[land].some(c => c.status !== "종결")
+      ? "red"
+      : "green"
+  }}
+  onClick={() => setSelectedLand(land)}
+>
+  👉 {land} ({grouped[land].length}건)
+</div>
         </div>
       ))}
 
